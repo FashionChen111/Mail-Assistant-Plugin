@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { Config, resolveConfig } from './src/config.js'
+import { registerExchangeRoutes } from './src/routes.js'
 import { createSessionScope } from './src/scope.js'
 import { createExchangeTools, registerExchangeTools } from './src/tools/index.js'
 
@@ -26,5 +27,14 @@ export async function apply(ctx, rawConfig = {}) {
       disposeTools()
       void scope.dispose()
     }, 'dsh-exchange: tools and scope')
+  }
+
+  // Optional web carrier routes (skipped cleanly in headless/ACP profiles without webServer).
+  if (typeof ctx.inject === 'function') {
+    ctx.inject(['webServer'], (webCtx) => {
+      registerExchangeRoutes(webCtx, { statePath, config })
+    })
+  } else if (ctx.webServer) {
+    registerExchangeRoutes(ctx, { statePath, config })
   }
 }

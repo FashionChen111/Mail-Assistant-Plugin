@@ -1,0 +1,11 @@
+- insert:
+    - id: dsh-exchange
+      name: '@local/dsh-exchange'
+      config:
+        limits:
+          max_search_results: 100
+          max_attachment_mb: 25
+          max_body_chars: 20000
+          request_timeout_seconds: 30
+        trigger:
+          explicit_prefix: '@mail'

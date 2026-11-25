@@ -81,8 +81,14 @@ async function readBoundedJsonBody(req, res) {
   }
 }
 
+function getService(ctx, name) {
+  if (!ctx) return undefined
+  if (typeof ctx.get === 'function') return ctx.get(name)
+  return ctx[name]
+}
+
 function checkTrustFence(ctx, req, res) {
-  const conn = ctx.connection ?? ctx.get?.('connection')
+  const conn = getService(ctx, 'connection')
   if (!conn || typeof conn.requestRejection !== 'function') {
     return false
   }
@@ -111,7 +117,7 @@ export function registerExchangeRoutes(
   ctx,
   { statePath, config, env = process.env, clientFactory = createEwsClient },
 ) {
-  const webServer = ctx.webServer ?? ctx.get?.('webServer')
+  const webServer = getService(ctx, 'webServer')
   if (!webServer || typeof webServer.register !== 'function') {
     return () => {}
   }

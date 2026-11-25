@@ -377,6 +377,16 @@ window.__ModuleLoader__.load({
       );
     }
 
+    async function readJsonSafely(resp) {
+      const text = await resp.text();
+      if (!text) return {};
+      try {
+        return JSON.parse(text);
+      } catch {
+        return { message: text.slice(0, 200) };
+      }
+    }
+
     function ExchangeSettingsPanel(props) {
       const t = props.t || ((k) => k);
       const [loading, setLoading] = useState(true);
@@ -404,7 +414,7 @@ window.__ModuleLoader__.load({
         setLoading(true);
         try {
           const resp = await fetch('dsh-exchange/api/status', { method: 'GET' });
-          const data = await resp.json();
+          const data = await readJsonSafely(resp);
           if (!resp.ok || !data.ok) {
             throw new Error(data.message || `HTTP ${resp.status}`);
           }
@@ -464,11 +474,11 @@ window.__ModuleLoader__.load({
               ...(editingPassword && passwordInput ? { password: passwordInput } : {}),
             }),
           });
-          const data = await resp.json();
+          const data = await readJsonSafely(resp);
           if (!resp.ok || !data.ok) {
             setFeedback({
               tone: 'err',
-              text: `${data.error ? '[' + data.error + '] ' : ''}${data.message || 'Connection failed'}`,
+              text: `${data.error ? '[' + data.error + '] ' : ''}${data.message || `HTTP ${resp.status}`}`,
             });
             return;
           }
@@ -498,11 +508,11 @@ window.__ModuleLoader__.load({
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify(payload),
           });
-          const data = await resp.json();
+          const data = await readJsonSafely(resp);
           if (!resp.ok || !data.ok) {
             setFeedback({
               tone: 'err',
-              text: `${data.error ? '[' + data.error + '] ' : ''}${data.message || 'Save failed'}`,
+              text: `${data.error ? '[' + data.error + '] ' : ''}${data.message || `HTTP ${resp.status}`}`,
             });
             return;
           }
@@ -527,9 +537,9 @@ window.__ModuleLoader__.load({
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ reset: true }),
           });
-          const data = await resp.json();
+          const data = await readJsonSafely(resp);
           if (!resp.ok || !data.ok) {
-            setFeedback({ tone: 'err', text: data.message || 'Reset failed' });
+            setFeedback({ tone: 'err', text: data.message || `HTTP ${resp.status}` });
             return;
           }
           setMode('blacklist');

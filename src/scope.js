@@ -25,7 +25,9 @@ function eventActivatesMail(event, explicitPrefix) {
 }
 
 export async function createSessionScope(ctx, { explicitPrefix = '@mail' } = {}) {
-  const projections = ctx?.sessionProjections ?? ctx?.get?.('sessionProjections')
+  const projections = typeof ctx?.get === 'function'
+    ? ctx.get('sessionProjections')
+    : ctx?.sessionProjections
 
   if (projections && typeof projections.register === 'function') {
     const handle = await projections.register({

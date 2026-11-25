@@ -31,7 +31,7 @@ export async function apply(ctx, rawConfig = {}) {
 
   // Optional web carrier routes (skipped cleanly in headless/ACP profiles without webServer).
   if (typeof ctx.inject === 'function') {
-    ctx.inject(['webServer'], (webCtx) => {
+    ctx.inject(['webServer', 'connection', 'credentials'], (webCtx) => {
       registerExchangeRoutes(webCtx, { statePath, config })
     })
   } else if (ctx.webServer) {

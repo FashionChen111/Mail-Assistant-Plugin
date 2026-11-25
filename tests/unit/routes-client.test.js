@@ -261,6 +261,48 @@ test('HTTP routes enforce trust fence, method/content-type/size guards, HTTPS, c
   }
 })
 
+test('HTTP routes use ctx.get() before property access so Cordis 4 undeclared-service getters never throw', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-ex-cordis-'))
+  try {
+    const statePath = join(dir, 'state.json')
+    const routes = new Map()
+    const services = {
+      webServer: {
+        register(route) { routes.set(route.path, route); return () => {} },
+      },
+      connection: {
+        requestRejection() { return undefined },
+      },
+      credentials: {
+        async readRecord() { return undefined },
+        async describeRecord() { return { configured: false, writable: true } },
+      },
+    }
+    // Simulate Cordis 4 strict property getter throwing when accessed directly without ctx.get()
+    const strictCtx = {
+      get(name) { return services[name] },
+      get webServer() { return services.webServer },
+      get connection() { throw new Error('property connection is not declared in inject') },
+      get credentials() { throw new Error('property credentials is not declared in inject') },
+      effect(fn) { return fn() },
+    }
+
+    registerExchangeRoutes(strictCtx, {
+      statePath,
+      config: { maxSearchResults: 100, maxAttachmentMb: 25, maxBodyChars: 20000, requestTimeoutSeconds: 30, requestTimeoutMs: 30000, explicitPrefix: '@mail' },
+      env: {},
+    })
+
+    const { req, res } = createMockReqRes({ method: 'GET' })
+    await routes.get(ROUTE_PATHS.status).handler(req, res)
+    const out = res._read()
+    assert.equal(out.statusCode, 200)
+    assert.equal(out.json.ok, true)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('client.js registers via __ModuleLoader__, uses only react, wires settings.section, icon, bundle config, and @mail trigger', async () => {
   const clientCode = await readFile(resolve(import.meta.dirname, '../../client.js'), 'utf8')
   let loaded = null

@@ -144,12 +144,18 @@ export async function writeState(statePath, nextState) {
   return normalized
 }
 
+function getCredentialsService(ctx) {
+  if (!ctx) return undefined
+  if (typeof ctx.get === 'function') return ctx.get('credentials')
+  return ctx.credentials
+}
+
 export async function getPassword(ctx, env = process.env) {
   const envPass = typeof env?.DSH_EXCHANGE_PASSWORD === 'string' ? env.DSH_EXCHANGE_PASSWORD : ''
   if (envPass.length > 0) {
     return envPass
   }
-  const credentials = ctx?.credentials ?? ctx?.get?.('credentials')
+  const credentials = getCredentialsService(ctx)
   if (!credentials?.readRecord) return undefined
   const record = await credentials.readRecord(CREDENTIAL_KEY)
   if (!record) return undefined
@@ -167,7 +173,7 @@ export async function describePassword(ctx, env = process.env) {
   if (envPass.length > 0) {
     return { configured: true, source: 'env' }
   }
-  const credentials = ctx?.credentials ?? ctx?.get?.('credentials')
+  const credentials = getCredentialsService(ctx)
   if (!credentials) {
     return { configured: false, source: 'none' }
   }
@@ -186,7 +192,7 @@ export async function setPassword(ctx, password) {
   if (typeof password !== 'string' || password.length === 0) {
     throw new ExchangeError(ERROR_CODES.AUTH_001, '密码不能为空')
   }
-  const credentials = ctx?.credentials ?? ctx?.get?.('credentials')
+  const credentials = getCredentialsService(ctx)
   if (!credentials?.modifyRecord) {
     throw new ExchangeError(ERROR_CODES.AUTH_001, '宿主凭据服务不可用，无法保存密码')
   }
@@ -197,7 +203,7 @@ export async function setPassword(ctx, password) {
 }
 
 export async function clearPassword(ctx) {
-  const credentials = ctx?.credentials ?? ctx?.get?.('credentials')
+  const credentials = getCredentialsService(ctx)
   if (!credentials?.deleteRecord) return
   await credentials.deleteRecord(CREDENTIAL_KEY)
 }

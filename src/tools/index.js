@@ -1040,7 +1040,9 @@ export function registerExchangeTools(ctx, { tools, scope }) {
     if (typeof dispose === 'function') disposers.push(dispose)
   }
 
-  const systemPrompt = ctx.systemPrompt ?? ctx.get?.('systemPrompt')
+  const systemPrompt = typeof ctx?.get === 'function'
+    ? ctx.get('systemPrompt')
+    : ctx?.systemPrompt
   if (systemPrompt && typeof systemPrompt.section === 'function') {
     const disposePrompt = systemPrompt.section({
       name: 'dsh-exchange:instructions',

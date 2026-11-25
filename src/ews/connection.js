@@ -7,9 +7,6 @@ const XhrApi = xhrModule.XhrApi ?? xhrModule.default?.XhrApi
 
 export const DEFAULT_RETRY_DELAYS_MS = Object.freeze([1000, 2000, 4000])
 
-const PR_IN_REPLY_TO_ID = 0x1042
-const PR_INTERNET_REFERENCES = 0x1039
-
 export function formatNtlmUsername({ email = '', domain = '', username = '' } = {}) {
   const cleanUser = typeof username === 'string' ? username.trim() : ''
   const cleanDomain = typeof domain === 'string' ? domain.trim() : ''
@@ -172,6 +169,15 @@ export function mapEwsError(err, context = {}) {
     )
   }
 
+  if (/Cannot read properties of undefined \(reading 'headers'\)|www-authenticate not found/i.test(text)) {
+    return new ExchangeError(
+      ERROR_CODES.NET_001,
+      'Exchange 服务器未返回 NTLM 握手响应，请检查服务器地址、HTTPS 证书或网络连通性',
+      { ...context, category: 'connection' },
+      { cause: err },
+    )
+  }
+
   return new ExchangeError(
     ERROR_CODES.NET_001,
     `Exchange 请求失败: ${text || '未知网络错误'}`,
@@ -275,49 +281,90 @@ function normalizeImportance(raw) {
   return 'normal'
 }
 
+function safeProp(getter, fallback = undefined) {
+  try {
+    const val = getter()
+    return val === undefined ? fallback : val
+  } catch {
+    return fallback
+  }
+}
+
 function mapRawItemSummary(item) {
-  const bodyValue = item?.Body?.Text ?? item?.body?.text ?? ''
-  const textBody = item?.TextBody?.Text ?? ''
-  const isHtml = item?.Body?.BodyType === ews.BodyType.HTML
+  const bodyObj = safeProp(() => item?.Body, null)
+  const bodyValue = safeProp(() => bodyObj?.Text, '')
+  const textBody = safeProp(() => item?.TextBody?.Text, '')
+  const isHtml = safeProp(() => bodyObj?.BodyType, null) === ews.BodyType.HTML
+  const fromAddr = safeProp(() => item?.From?.Address, '') || safeProp(() => item?.Sender?.Address, '')
+  const toList = extractAddressList(safeProp(() => item?.ToRecipients, null))
+  const displayTo = safeProp(() => item?.DisplayTo, '')
+  const resolvedTo = toList.length > 0
+    ? toList
+    : (displayTo ? String(displayTo).split(/[;,]/).map((s) => s.trim()).filter(Boolean) : [])
+
   return {
-    id: String(item?.Id?.UniqueId ?? ''),
-    parentFolderId: String(item?.ParentFolderId?.UniqueId ?? ''),
-    conversationId: String(item?.ConversationId?.UniqueId ?? ''),
-    from: String(item?.From?.Address ?? item?.Sender?.Address ?? ''),
-    to: extractAddressList(item?.ToRecipients),
-    cc: extractAddressList(item?.CcRecipients),
-    subject: String(item?.Subject ?? ''),
-    bodyText: textBody || (!isHtml ? String(bodyValue) : ''),
-    bodyHtml: isHtml ? String(bodyValue) : null,
-    receivedTime: safeIsoDate(item?.DateTimeReceived),
-    sentTime: safeIsoDate(item?.DateTimeSent ?? item?.DateTimeReceived),
-    isRead: Boolean(item?.IsRead),
-    isDraft: Boolean(item?.IsDraft),
-    isFlagged: item?.Flag?.FlagStatus === ews.ItemFlagStatus.Flagged,
-    importance: normalizeImportance(item?.Importance),
-    hasAttachments: Boolean(item?.HasAttachments),
+    id: String(safeProp(() => item?.Id?.UniqueId, '')),
+    parentFolderId: String(safeProp(() => item?.ParentFolderId?.UniqueId, '')),
+    conversationId: String(safeProp(() => item?.ConversationId?.UniqueId, '')),
+    from: String(fromAddr || ''),
+    to: resolvedTo,
+    cc: extractAddressList(safeProp(() => item?.CcRecipients, null)),
+    subject: String(safeProp(() => item?.Subject, '')),
+    bodyText: textBody || (!isHtml ? String(bodyValue || '') : ''),
+    bodyHtml: isHtml ? String(bodyValue || '') : null,
+    receivedTime: safeIsoDate(safeProp(() => item?.DateTimeReceived, null)),
+    sentTime: safeIsoDate(safeProp(() => item?.DateTimeSent, null) ?? safeProp(() => item?.DateTimeReceived, null)),
+    isRead: Boolean(safeProp(() => item?.IsRead, false)),
+    isDraft: Boolean(safeProp(() => item?.IsDraft, false)),
+    isFlagged: safeProp(() => item?.Flag?.FlagStatus, null) === ews.ItemFlagStatus.Flagged,
+    importance: normalizeImportance(safeProp(() => item?.Importance, null)),
+    hasAttachments: Boolean(safeProp(() => item?.HasAttachments, false)),
   }
 }
 
 function mapRawItemDetail(item) {
   const base = mapRawItemSummary(item)
-  const rawAttachments = item?.Attachments?.Items ?? item?.Attachments?.items ?? []
+  const rawAttachments = safeProp(() => item?.Attachments?.Items, null)
+    ?? safeProp(() => item?.Attachments?.items, [])
   const attachments = []
   for (const att of rawAttachments) {
     attachments.push({
-      id: String(att?.Id ?? ''),
-      name: String(att?.Name ?? ''),
-      size: Number(att?.Size ?? 0),
-      content_type: String(att?.ContentType ?? 'application/octet-stream'),
-      is_inline: Boolean(att?.IsInline),
+      id: String(safeProp(() => att?.Id, '')),
+      name: String(safeProp(() => att?.Name, '')),
+      size: Number(safeProp(() => att?.Size, 0)),
+      content_type: String(safeProp(() => att?.ContentType, 'application/octet-stream')),
+      is_inline: Boolean(safeProp(() => att?.IsInline, false)),
     })
+  }
+  const headerRefs = parseReferencesHeader(safeProp(() => item?.InternetMessageHeaders, null))
+  const directRefsRaw = [
+    safeProp(() => item?.References, ''),
+    safeProp(() => item?.InReplyTo, ''),
+  ].filter(Boolean).join(' ')
+  const combinedRefs = [...headerRefs]
+  const refSeen = new Set(combinedRefs)
+  if (directRefsRaw) {
+    const tokens = directRefsRaw.match(/<[^>]+>/g) ?? directRefsRaw.split(/\s+/).filter(Boolean)
+    for (const tok of tokens) {
+      if (!refSeen.has(tok)) {
+        refSeen.add(tok)
+        combinedRefs.push(tok)
+      }
+    }
   }
   return {
     ...base,
-    messageId: String(item?.InternetMessageId ?? ''),
-    references: parseReferencesHeader(item?.InternetMessageHeaders),
+    messageId: String(safeProp(() => item?.InternetMessageId, '')),
+    references: combinedRefs,
     attachments,
   }
+}
+
+function escapeXmlText(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
 }
 
 function buildSearchFilter(filterOpts = {}) {
@@ -326,7 +373,7 @@ function buildSearchFilter(filterOpts = {}) {
   const ci = ews.ComparisonMode.IgnoreCase
 
   if (filterOpts.query) {
-    const q = String(filterOpts.query)
+    const q = escapeXmlText(filterOpts.query)
     const orGroup = new ews.SearchFilter.SearchFilterCollection(ews.LogicalOperator.Or)
     orGroup.Add(new ews.SearchFilter.ContainsSubstring(ews.ItemSchema.Subject, q, sub, ci))
     orGroup.Add(new ews.SearchFilter.ContainsSubstring(ews.ItemSchema.Body, q, sub, ci))
@@ -334,13 +381,13 @@ function buildSearchFilter(filterOpts = {}) {
     filters.push(orGroup)
   }
   if (filterOpts.from) {
-    filters.push(new ews.SearchFilter.ContainsSubstring(ews.EmailMessageSchema.From, String(filterOpts.from), sub, ci))
+    filters.push(new ews.SearchFilter.ContainsSubstring(ews.EmailMessageSchema.From, escapeXmlText(filterOpts.from), sub, ci))
   }
   if (filterOpts.to) {
-    filters.push(new ews.SearchFilter.ContainsSubstring(ews.ItemSchema.DisplayTo, String(filterOpts.to), sub, ci))
+    filters.push(new ews.SearchFilter.ContainsSubstring(ews.ItemSchema.DisplayTo, escapeXmlText(filterOpts.to), sub, ci))
   }
   if (filterOpts.subject) {
-    filters.push(new ews.SearchFilter.ContainsSubstring(ews.ItemSchema.Subject, String(filterOpts.subject), sub, ci))
+    filters.push(new ews.SearchFilter.ContainsSubstring(ews.ItemSchema.Subject, escapeXmlText(filterOpts.subject), sub, ci))
   }
   if (filterOpts.unreadOnly) {
     filters.push(new ews.SearchFilter.IsEqualTo(ews.EmailMessageSchema.IsRead, false))
@@ -440,8 +487,8 @@ export function createEwsClient(options = {}) {
           ews.ItemSchema.ConversationId,
           ews.ItemSchema.Importance,
           ews.ItemSchema.IsDraft,
+          ews.ItemSchema.DisplayTo,
           ews.EmailMessageSchema.From,
-          ews.EmailMessageSchema.ToRecipients,
           ews.EmailMessageSchema.IsRead,
         ]
         view.PropertySet = new ews.PropertySet(ews.BasePropertySet.IdOnly, props)
@@ -484,12 +531,14 @@ export function createEwsClient(options = {}) {
           ews.ItemSchema.ParentFolderId,
           ews.ItemSchema.ConversationId,
           ews.ItemSchema.InternetMessageHeaders,
+          ews.ItemSchema.InReplyTo,
           ews.ItemSchema.Flag,
           ews.ItemSchema.Importance,
           ews.ItemSchema.IsDraft,
           ews.ItemSchema.DateTimeReceived,
           ews.ItemSchema.DateTimeSent,
           ews.EmailMessageSchema.InternetMessageId,
+          ews.EmailMessageSchema.References,
           ews.EmailMessageSchema.From,
           ews.EmailMessageSchema.ToRecipients,
           ews.EmailMessageSchema.CcRecipients,
@@ -555,26 +604,20 @@ export function createEwsClient(options = {}) {
     async saveDraft(payload, signal) {
       return run(async () => {
         const msg = new ews.EmailMessage(service)
-        msg.Subject = payload.subject
+        msg.Subject = escapeXmlText(payload.subject)
         for (const addr of payload.to) msg.ToRecipients.Add(addr)
         for (const addr of payload.cc ?? []) msg.CcRecipients.Add(addr)
         for (const addr of payload.bcc ?? []) msg.BccRecipients.Add(addr)
         if (payload.bodyHtml) {
-          msg.Body = new ews.MessageBody(ews.BodyType.HTML, payload.bodyHtml)
+          msg.Body = new ews.MessageBody(ews.BodyType.HTML, escapeXmlText(payload.bodyHtml))
         } else {
-          msg.Body = new ews.MessageBody(ews.BodyType.Text, payload.bodyText)
+          msg.Body = new ews.MessageBody(ews.BodyType.Text, escapeXmlText(payload.bodyText))
         }
         if (payload.inReplyToMessageId) {
-          msg.SetExtendedProperty(
-            new ews.ExtendedPropertyDefinition(PR_IN_REPLY_TO_ID, ews.MapiPropertyType.String),
-            payload.inReplyToMessageId,
-          )
+          msg.InReplyTo = escapeXmlText(payload.inReplyToMessageId)
         }
         if (payload.referencesHeader) {
-          msg.SetExtendedProperty(
-            new ews.ExtendedPropertyDefinition(PR_INTERNET_REFERENCES, ews.MapiPropertyType.String),
-            payload.referencesHeader,
-          )
+          msg.References = escapeXmlText(payload.referencesHeader)
         }
         // Draft-only by design: ONLY Save to Drafts, NEVER Send / SendAndSaveCopy.
         await msg.Save(ews.WellKnownFolderName.Drafts)
@@ -591,7 +634,7 @@ export function createEwsClient(options = {}) {
         if (!msg.IsDraft) {
           throw new ExchangeError(ERROR_CODES.PERM_001, '只能更新草稿箱中的草稿邮件', { draft_id: draftId })
         }
-        if (patch.subject !== undefined) msg.Subject = patch.subject
+        if (patch.subject !== undefined) msg.Subject = escapeXmlText(patch.subject)
         if (patch.to !== undefined) {
           msg.ToRecipients.Clear()
           for (const addr of patch.to) msg.ToRecipients.Add(addr)
@@ -605,21 +648,15 @@ export function createEwsClient(options = {}) {
           for (const addr of patch.bcc) msg.BccRecipients.Add(addr)
         }
         if (patch.bodyHtml !== undefined) {
-          msg.Body = new ews.MessageBody(ews.BodyType.HTML, patch.bodyHtml)
+          msg.Body = new ews.MessageBody(ews.BodyType.HTML, escapeXmlText(patch.bodyHtml))
         } else if (patch.bodyText !== undefined) {
-          msg.Body = new ews.MessageBody(ews.BodyType.Text, patch.bodyText)
+          msg.Body = new ews.MessageBody(ews.BodyType.Text, escapeXmlText(patch.bodyText))
         }
         if (patch.inReplyToMessageId) {
-          msg.SetExtendedProperty(
-            new ews.ExtendedPropertyDefinition(PR_IN_REPLY_TO_ID, ews.MapiPropertyType.String),
-            patch.inReplyToMessageId,
-          )
+          msg.InReplyTo = escapeXmlText(patch.inReplyToMessageId)
         }
         if (patch.referencesHeader) {
-          msg.SetExtendedProperty(
-            new ews.ExtendedPropertyDefinition(PR_INTERNET_REFERENCES, ews.MapiPropertyType.String),
-            patch.referencesHeader,
-          )
+          msg.References = escapeXmlText(patch.referencesHeader)
         }
         await msg.Update(ews.ConflictResolutionMode.AlwaysOverwrite)
         return {

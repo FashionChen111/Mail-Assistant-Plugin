@@ -79,6 +79,10 @@ test('mapEwsError classifies auth, rate limit, not-found, and network failures d
   const timeoutErr = mapEwsError(Object.assign(new Error('timeout of 30000ms exceeded'), { code: 'ECONNABORTED' }))
   assert.equal(timeoutErr.code, ERROR_CODES.NET_001)
   assert.equal(timeoutErr.details.category, 'timeout')
+
+  const ntlmNoResp = mapEwsError(new TypeError("Cannot read properties of undefined (reading 'headers')"))
+  assert.equal(ntlmNoResp.code, ERROR_CODES.NET_001)
+  assert.equal(ntlmNoResp.details.category, 'connection')
 })
 
 test('withRetry retries 3 times on RATE_001 with 1s/2s/4s delays, never retries AUTH_001, and propagates AbortError', async () => {

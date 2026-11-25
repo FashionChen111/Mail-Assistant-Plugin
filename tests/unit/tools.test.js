@@ -221,3 +221,214 @@ test('registerExchangeTools gates all 15 tools and systemPrompt section behind @
   assert.equal(registeredPrompt.text({ agent: { session: inactiveSession } }), '')
   assert.match(registeredPrompt.text({ agent: { session: activeSession } }), /exchange_save_draft/)
 })
+
+test('exchange_extract_todos honors include_unread/include_important combinations and exchange_summarize_project handles float days & PERM_001 fallback', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-ex-tools-fix-'))
+  try {
+    const statePath = join(dir, 'state.json')
+    const auditPath = join(dir, 'audit.jsonl')
+    await writeState(statePath, {
+      version: '1.1.0',
+      account: {
+        serverUrl: 'https://exchange.company.com/EWS/Exchange.asmx',
+        email: 'me@company.com',
+        domain: 'CORP',
+        username: 'me',
+      },
+      access: { mode: 'whitelist', folders: ['收件箱'], emergencyLock: false },
+    })
+
+    const emails = [
+      {
+        id: 'e-read-normal',
+        parentFolderId: 'f-inbox',
+        conversationId: 'c1',
+        messageId: '<m1@c>',
+        references: [],
+        from: 'a@corp.com',
+        to: ['me@company.com'],
+        cc: [],
+        subject: 'Widevine routine note',
+        bodyText: 'Please submit report by 2026-11-28.',
+        bodyHtml: null,
+        receivedTime: '2026-11-24T10:00:00.000Z',
+        sentTime: '2026-11-24T10:00:00.000Z',
+        isRead: true,
+        isDraft: false,
+        isFlagged: false,
+        importance: 'normal',
+        hasAttachments: false,
+        attachments: [],
+      },
+      {
+        id: 'e-unread-normal',
+        parentFolderId: 'f-inbox',
+        conversationId: 'c2',
+        messageId: '<m2@c>',
+        references: [],
+        from: 'b@corp.com',
+        to: ['me@company.com'],
+        cc: [],
+        subject: 'Widevine unread action',
+        bodyText: 'Please reply by 2026-11-27.',
+        bodyHtml: null,
+        receivedTime: '2026-11-24T11:00:00.000Z',
+        sentTime: '2026-11-24T11:00:00.000Z',
+        isRead: false,
+        isDraft: false,
+        isFlagged: false,
+        importance: 'normal',
+        hasAttachments: false,
+        attachments: [],
+      },
+      {
+        id: 'e-read-high',
+        parentFolderId: 'f-inbox',
+        conversationId: 'c3',
+        messageId: '<m3@c>',
+        references: [],
+        from: 'c@corp.com',
+        to: ['me@company.com'],
+        cc: [],
+        subject: 'Widevine urgent escalation',
+        bodyText: 'Please review urgently by 2026-11-26.',
+        bodyHtml: null,
+        receivedTime: '2026-11-24T12:00:00.000Z',
+        sentTime: '2026-11-24T12:00:00.000Z',
+        isRead: true,
+        isDraft: false,
+        isFlagged: false,
+        importance: 'high',
+        hasAttachments: false,
+        attachments: [],
+      },
+      {
+        id: 'e-moved-hr',
+        parentFolderId: 'f-inbox',
+        conversationId: 'c4',
+        messageId: '<m4@c>',
+        references: [],
+        from: 'd@corp.com',
+        to: ['me@company.com'],
+        cc: [],
+        subject: 'Widevine moved item',
+        bodyText: 'Moved to HR after listing',
+        bodyHtml: null,
+        receivedTime: '2026-11-24T13:00:00.000Z',
+        sentTime: '2026-11-24T13:00:00.000Z',
+        isRead: true,
+        isDraft: false,
+        isFlagged: false,
+        importance: 'normal',
+        hasAttachments: false,
+        attachments: [],
+      },
+    ]
+
+    let findItemsCalls = 0
+    let lastFilterOpts = null
+    const fakeClient = {
+      async findFolders() {
+        return {
+          rootId: 'root',
+          folders: [
+            { id: 'f-inbox', parentId: 'root', name: '收件箱', folderClass: 'IPF.Note', isRootChild: true },
+            { id: 'f-hr', parentId: 'root', name: '人事资料', folderClass: 'IPF.Note', isRootChild: true },
+          ],
+        }
+      },
+      async findItems(_folderId, filterOpts) {
+        findItemsCalls++
+        lastFilterOpts = filterOpts
+        return { items: emails, total: emails.length }
+      },
+      async getItem(id) {
+        if (id === 'e-moved-hr') {
+          return { ...emails[3], parentFolderId: 'f-hr' }
+        }
+        return emails.find((e) => e.id === id)
+      },
+      async findConversationItems() { return [] },
+    }
+
+    const tools = createExchangeTools({
+      ctx: {},
+      config: {
+        maxSearchResults: 100,
+        maxAttachmentMb: 25,
+        maxAttachmentBytes: 25 * 1024 * 1024,
+        maxBodyChars: 20000,
+        requestTimeoutSeconds: 30,
+        requestTimeoutMs: 30000,
+        explicitPrefix: '@mail',
+        dataDir: dir,
+      },
+      statePath,
+      auditPath,
+      clientFactory: () => fakeClient,
+      getPasswordFn: async () => 'secret-pass',
+      nowFn: () => new Date('2026-11-25T00:00:00.000Z'),
+    })
+    const byName = new Map(tools.map((t) => [t.name, t]))
+    const exec = { signal: new AbortController().signal }
+
+    // 1. include_unread: false & include_important: false -> returns empty immediately with zero EWS calls
+    const none = await byName.get('exchange_extract_todos').execute(
+      { days: 7, include_unread: false, include_important: false },
+      exec,
+    )
+    assert.deepEqual(none, { todos: [] })
+    assert.equal(findItemsCalls, 0)
+
+    // 2. include_unread: true & include_important: true -> passes unreadOrImportant and excludes normal read email
+    const both = await byName.get('exchange_extract_todos').execute(
+      { days: 7, include_unread: true, include_important: true },
+      exec,
+    )
+    assert.equal(lastFilterOpts.unreadOrImportant, true)
+    const idsBoth = both.todos.map((t) => t.source_email_id)
+    assert.ok(!idsBoth.includes('e-read-normal'), 'normal read email must not be included')
+    assert.ok(idsBoth.includes('e-unread-normal'))
+    assert.ok(idsBoth.includes('e-read-high'))
+
+    // 3. exchange_summarize_project rejects float days via integer schema and skips moved PERM_001 email when include_threads: false
+    await assert.rejects(
+      () => byName.get('exchange_summarize_project').execute(
+        { project: 'Widevine', days: 3.5, include_threads: false },
+        exec,
+      ),
+      /integer/i,
+    )
+    const summary = await byName.get('exchange_summarize_project').execute(
+      { project: 'Widevine', days: 3, include_threads: false },
+      exec,
+    )
+    assert.equal(summary.time_range.days, 3)
+    assert.ok(Number.isInteger(summary.time_range.days))
+    assert.ok(summary.related_emails.some((e) => e.id === 'e-unread-normal'))
+    assert.ok(!summary.related_emails.some((e) => e.id === 'e-moved-hr'))
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('index.js does not require credentials at top-level so dsh-headless can activate the plugin', async () => {
+  const entry = await import('../../index.js')
+  assert.ok(Array.isArray(entry.inject))
+  assert.ok(!entry.inject.includes('credentials'), 'top-level inject must not require credentials for headless compatibility')
+  assert.ok(entry.inject.includes('tools'))
+  assert.ok(entry.inject.includes('sessionProjections'))
+  assert.ok(entry.inject.includes('systemPrompt'))
+
+  // Apply on a headless-like context without credentials or webServer
+  const registered = []
+  const headlessCtx = {
+    tools: { register(def) { registered.push(def.name); return () => {} } },
+    sessionProjections: { register() { return { get() { return { activated: false } }, dispose() {} } } },
+    systemPrompt: { section() { return () => {} } },
+    effect(fn) { return fn() },
+    inject() {}, // webServer/connection/credentials never become ready in headless
+  }
+  await entry.apply(headlessCtx, {})
+  assert.equal(registered.length, 15)
+})

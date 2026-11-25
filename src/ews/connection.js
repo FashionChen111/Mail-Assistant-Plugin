@@ -201,12 +201,37 @@ function abortableSleep(ms, signal) {
   })
 }
 
+function raceWithAbort(promise, signal) {
+  if (!signal) return promise
+  if (signal.aborted) {
+    promise.catch(() => {})
+    return Promise.reject(signal.reason ?? new DOMException('The operation was aborted', 'AbortError'))
+  }
+  return new Promise((resolve, reject) => {
+    function onAbort() {
+      promise.catch(() => {})
+      reject(signal.reason ?? new DOMException('The operation was aborted', 'AbortError'))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    promise.then(
+      (val) => {
+        signal.removeEventListener('abort', onAbort)
+        resolve(val)
+      },
+      (err) => {
+        signal.removeEventListener('abort', onAbort)
+        reject(err)
+      },
+    )
+  })
+}
+
 export async function withRetry(fn, { signal, delaysMs = DEFAULT_RETRY_DELAYS_MS, onRetry } = {}) {
   let attempt = 0
   while (true) {
     throwIfAborted(signal)
     try {
-      return await fn(attempt)
+      return await raceWithAbort(Promise.resolve().then(() => fn(attempt)), signal)
     } catch (rawErr) {
       if (isAbortError(rawErr) || signal?.aborted) {
         if (signal?.aborted && signal.reason !== undefined) {
@@ -360,40 +385,102 @@ function mapRawItemDetail(item) {
   }
 }
 
-function escapeXmlText(value) {
+export function escapeXmlText(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
 }
 
-function buildSearchFilter(filterOpts = {}) {
+export function toEwsEmailAddress(raw) {
+  const cleaned = String(raw ?? '').trim()
+  const match = cleaned.match(/^"?([^"<>]*?)"?\s*<\s*([^<>\s]+)\s*>$/)
+  if (match) {
+    const displayName = match[1].trim()
+    const addr = match[2].trim()
+    if (displayName) {
+      return new ews.EmailAddress(escapeXmlText(displayName), escapeXmlText(addr))
+    }
+    return new ews.EmailAddress(escapeXmlText(addr))
+  }
+  return new ews.EmailAddress(escapeXmlText(cleaned))
+}
+
+function formatAqsQuoted(value) {
+  const clean = String(value ?? '')
+    .replace(/[\x00-\x1f\x7f]/g, ' ')
+    .replace(/"/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return clean ? `"${clean}"` : ''
+}
+
+function formatAqsIso(iso) {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toISOString().replace(/\.\d{3}Z$/, 'Z')
+}
+
+export function buildAqsQueryString(filterOpts = {}) {
+  const clauses = []
+  if (filterOpts.from) {
+    const q = formatAqsQuoted(filterOpts.from)
+    if (q) clauses.push(`from:${q}`)
+  }
+  if (filterOpts.to) {
+    const q = formatAqsQuoted(filterOpts.to)
+    if (q) clauses.push(`to:${q}`)
+  }
+  if (filterOpts.subject) {
+    const q = formatAqsQuoted(filterOpts.subject)
+    if (q) clauses.push(`subject:${q}`)
+  }
+  if (filterOpts.query) {
+    const q = formatAqsQuoted(filterOpts.query)
+    if (q) clauses.push(q)
+  }
+  if (filterOpts.unreadOrImportant) {
+    clauses.push('(isread:false OR importance:high)')
+  } else {
+    if (filterOpts.unreadOnly) clauses.push('isread:false')
+    if (filterOpts.importantOnly) clauses.push('importance:high')
+  }
+  if (filterOpts.sinceIso) {
+    const ts = formatAqsIso(filterOpts.sinceIso)
+    if (ts) clauses.push(`received>=${ts}`)
+  }
+  if (filterOpts.untilIso) {
+    const ts = formatAqsIso(filterOpts.untilIso)
+    if (ts) clauses.push(`received<=${ts}`)
+  }
+  return escapeXmlText(clauses.join(' '))
+}
+
+export function buildSearchFilter(filterOpts = {}) {
   const filters = []
   const sub = ews.ContainmentMode.Substring
   const ci = ews.ComparisonMode.IgnoreCase
 
-  if (filterOpts.query) {
-    const q = escapeXmlText(filterOpts.query)
-    const orGroup = new ews.SearchFilter.SearchFilterCollection(ews.LogicalOperator.Or)
-    orGroup.Add(new ews.SearchFilter.ContainsSubstring(ews.ItemSchema.Subject, q, sub, ci))
-    orGroup.Add(new ews.SearchFilter.ContainsSubstring(ews.ItemSchema.Body, q, sub, ci))
-    orGroup.Add(new ews.SearchFilter.ContainsSubstring(ews.EmailMessageSchema.From, q, sub, ci))
-    filters.push(orGroup)
-  }
-  if (filterOpts.from) {
-    filters.push(new ews.SearchFilter.ContainsSubstring(ews.EmailMessageSchema.From, escapeXmlText(filterOpts.from), sub, ci))
-  }
   if (filterOpts.to) {
     filters.push(new ews.SearchFilter.ContainsSubstring(ews.ItemSchema.DisplayTo, escapeXmlText(filterOpts.to), sub, ci))
   }
   if (filterOpts.subject) {
     filters.push(new ews.SearchFilter.ContainsSubstring(ews.ItemSchema.Subject, escapeXmlText(filterOpts.subject), sub, ci))
   }
-  if (filterOpts.unreadOnly) {
-    filters.push(new ews.SearchFilter.IsEqualTo(ews.EmailMessageSchema.IsRead, false))
-  }
-  if (filterOpts.importantOnly) {
-    filters.push(new ews.SearchFilter.IsEqualTo(ews.ItemSchema.Importance, ews.Importance.High))
+  if (filterOpts.unreadOrImportant) {
+    const orGroup = new ews.SearchFilter.SearchFilterCollection(ews.LogicalOperator.Or)
+    orGroup.Add(new ews.SearchFilter.IsEqualTo(ews.EmailMessageSchema.IsRead, false))
+    orGroup.Add(new ews.SearchFilter.IsEqualTo(ews.ItemSchema.Importance, ews.Importance[ews.Importance.High]))
+    filters.push(orGroup)
+  } else {
+    if (filterOpts.unreadOnly) {
+      filters.push(new ews.SearchFilter.IsEqualTo(ews.EmailMessageSchema.IsRead, false))
+    }
+    if (filterOpts.importantOnly) {
+      filters.push(new ews.SearchFilter.IsEqualTo(ews.ItemSchema.Importance, ews.Importance[ews.Importance.High]))
+    }
   }
   if (filterOpts.sinceIso) {
     filters.push(new ews.SearchFilter.IsGreaterThanOrEqualTo(ews.ItemSchema.DateTimeReceived, ews.DateTime.Parse(filterOpts.sinceIso)))
@@ -401,15 +488,37 @@ function buildSearchFilter(filterOpts = {}) {
   if (filterOpts.untilIso) {
     filters.push(new ews.SearchFilter.IsLessThanOrEqualTo(ews.ItemSchema.DateTimeReceived, ews.DateTime.Parse(filterOpts.untilIso)))
   }
-  if (filterOpts.conversationId) {
-    filters.push(new ews.SearchFilter.IsEqualTo(ews.ItemSchema.ConversationId, new ews.ConversationId(String(filterOpts.conversationId))))
-  }
 
   if (filters.length === 0) return null
   if (filters.length === 1) return filters[0]
   const andGroup = new ews.SearchFilter.SearchFilterCollection(ews.LogicalOperator.And)
   for (const f of filters) andGroup.Add(f)
   return andGroup
+}
+
+function buildDetailPropertySet() {
+  const propSet = new ews.PropertySet(ews.BasePropertySet.FirstClassProperties, [
+    ews.ItemSchema.Body,
+    ews.ItemSchema.TextBody,
+    ews.ItemSchema.Attachments,
+    ews.ItemSchema.ParentFolderId,
+    ews.ItemSchema.ConversationId,
+    ews.ItemSchema.InternetMessageHeaders,
+    ews.ItemSchema.InReplyTo,
+    ews.ItemSchema.Flag,
+    ews.ItemSchema.Importance,
+    ews.ItemSchema.IsDraft,
+    ews.ItemSchema.DateTimeReceived,
+    ews.ItemSchema.DateTimeSent,
+    ews.EmailMessageSchema.InternetMessageId,
+    ews.EmailMessageSchema.References,
+    ews.EmailMessageSchema.From,
+    ews.EmailMessageSchema.ToRecipients,
+    ews.EmailMessageSchema.CcRecipients,
+    ews.EmailMessageSchema.IsRead,
+  ])
+  propSet.RequestedBodyType = ews.BodyType.HTML
+  return propSet
 }
 
 export function createEwsClient(options = {}) {
@@ -493,11 +602,20 @@ export function createEwsClient(options = {}) {
         ]
         view.PropertySet = new ews.PropertySet(ews.BasePropertySet.IdOnly, props)
 
-        const searchFilter = buildSearchFilter(filterOpts)
         const target = new ews.FolderId(folderId)
-        const res = searchFilter
-          ? await service.FindItems(target, searchFilter, view)
-          : await service.FindItems(target, view)
+        const useAqs = Boolean(filterOpts.query || filterOpts.from)
+        let res
+        if (useAqs) {
+          const queryString = buildAqsQueryString(filterOpts)
+          res = queryString
+            ? await service.FindItems(target, queryString, view)
+            : await service.FindItems(target, view)
+        } else {
+          const searchFilter = buildSearchFilter(filterOpts)
+          res = searchFilter
+            ? await service.FindItems(target, searchFilter, view)
+            : await service.FindItems(target, view)
+        }
         const rawItems = res?.Items ?? []
 
         // Load lightweight body preview for snippets if items were returned.
@@ -510,7 +628,8 @@ export function createEwsClient(options = {}) {
           snippetSet.RequestedBodyType = ews.BodyType.Text
           try {
             await service.LoadPropertiesForItems(rawItems, snippetSet)
-          } catch {
+          } catch (err) {
+            if (isAbortError(err) || signal?.aborted) throw err
             // Fall back to empty snippets if batch body preview fails on a partial item.
           }
         }
@@ -524,51 +643,37 @@ export function createEwsClient(options = {}) {
 
     async getItem(emailId, signal) {
       return run(async () => {
-        const propSet = new ews.PropertySet(ews.BasePropertySet.FirstClassProperties, [
-          ews.ItemSchema.Body,
-          ews.ItemSchema.TextBody,
-          ews.ItemSchema.Attachments,
-          ews.ItemSchema.ParentFolderId,
-          ews.ItemSchema.ConversationId,
-          ews.ItemSchema.InternetMessageHeaders,
-          ews.ItemSchema.InReplyTo,
-          ews.ItemSchema.Flag,
-          ews.ItemSchema.Importance,
-          ews.ItemSchema.IsDraft,
-          ews.ItemSchema.DateTimeReceived,
-          ews.ItemSchema.DateTimeSent,
-          ews.EmailMessageSchema.InternetMessageId,
-          ews.EmailMessageSchema.References,
-          ews.EmailMessageSchema.From,
-          ews.EmailMessageSchema.ToRecipients,
-          ews.EmailMessageSchema.CcRecipients,
-          ews.EmailMessageSchema.IsRead,
-        ])
-        propSet.RequestedBodyType = ews.BodyType.HTML
+        const propSet = buildDetailPropertySet()
         const msg = await ews.EmailMessage.Bind(service, new ews.ItemId(emailId), propSet)
         return mapRawItemDetail(msg)
       }, signal)
     },
 
-    async findConversationItems(conversationId, folderIds, signal) {
-      const results = []
-      const seen = new Set()
-      for (const folderId of folderIds) {
-        throwIfAborted(signal)
-        const { items } = await this.findItems(
-          folderId,
-          { conversationId, limit: 100, includeSnippet: false },
-          signal,
+    async findConversationItems(conversationId, _folderIds, signal) {
+      return run(async () => {
+        const propSet = buildDetailPropertySet()
+        // Query all folders (empty foldersToIgnore) so thread.js fails closed if any item is in a restricted folder.
+        const convResp = await service.GetConversationItems(
+          new ews.ConversationId(String(conversationId)),
+          propSet,
+          null,
+          [],
+          ews.ConversationSortOrder.DateOrderAscending,
         )
-        for (const item of items) {
-          if (!item.id || seen.has(item.id)) continue
-          seen.add(item.id)
-          throwIfAborted(signal)
-          const detail = await this.getItem(item.id, signal)
-          results.push(detail)
+        const nodes = convResp?.ConversationNodes?.Items ?? convResp?.ConversationNodes ?? []
+        const results = []
+        const seen = new Set()
+        for (const node of nodes) {
+          const items = node?.Items ?? []
+          for (const rawItem of items) {
+            const detail = mapRawItemDetail(rawItem)
+            if (!detail.id || seen.has(detail.id)) continue
+            seen.add(detail.id)
+            results.push(detail)
+          }
         }
-      }
-      return results
+        return results
+      }, signal)
     },
 
     async downloadAttachment(emailId, attachmentId, signal) {
@@ -587,6 +692,32 @@ export function createEwsClient(options = {}) {
           })
         }
         throwIfAborted(signal)
+        if (target instanceof ews.ItemAttachment) {
+          // Use GetAttachments([id]) instead of target.Load() to bypass ews-javascript-api@0.15.3 ItemAttachment.Validate() NPE when Item is unloaded.
+          const responses = await service.GetAttachments(
+            [String(target.Id ?? attachmentId)],
+            null,
+            [ews.ItemSchema.MimeContent],
+          )
+          const loadedAtt = safeProp(() => responses.__thisIndexer(0)?.Attachment, null)
+          const mimeBase64 = safeProp(() => loadedAtt?.Item?.MimeContent?.Content, '')
+          if (typeof mimeBase64 !== 'string' || mimeBase64.length === 0) {
+            throw new ExchangeError(
+              ERROR_CODES.ATT_001,
+              '暂不支持下载此嵌套邮件附件 (ItemAttachment) 或其不包含可导出的 MIME 内容',
+              { email_id: emailId, attachment_id: attachmentId, attachment_type: 'ItemAttachment' },
+            )
+          }
+          const buffer = Buffer.from(mimeBase64, 'base64')
+          return {
+            id: String(loadedAtt?.Id ?? target.Id ?? attachmentId),
+            name: String(loadedAtt?.Name ?? target.Name ?? 'message.eml'),
+            size: buffer.byteLength,
+            contentType: String(loadedAtt?.ContentType || target.ContentType || 'message/rfc822'),
+            isInline: Boolean(loadedAtt?.IsInline ?? target.IsInline),
+            buffer,
+          }
+        }
         await target.Load()
         const base64 = typeof target.Base64Content === 'string' ? target.Base64Content : ''
         const buffer = Buffer.from(base64, 'base64')
@@ -605,9 +736,9 @@ export function createEwsClient(options = {}) {
       return run(async () => {
         const msg = new ews.EmailMessage(service)
         msg.Subject = escapeXmlText(payload.subject)
-        for (const addr of payload.to) msg.ToRecipients.Add(addr)
-        for (const addr of payload.cc ?? []) msg.CcRecipients.Add(addr)
-        for (const addr of payload.bcc ?? []) msg.BccRecipients.Add(addr)
+        for (const addr of payload.to) msg.ToRecipients.Add(toEwsEmailAddress(addr))
+        for (const addr of payload.cc ?? []) msg.CcRecipients.Add(toEwsEmailAddress(addr))
+        for (const addr of payload.bcc ?? []) msg.BccRecipients.Add(toEwsEmailAddress(addr))
         if (payload.bodyHtml) {
           msg.Body = new ews.MessageBody(ews.BodyType.HTML, escapeXmlText(payload.bodyHtml))
         } else {
@@ -637,15 +768,15 @@ export function createEwsClient(options = {}) {
         if (patch.subject !== undefined) msg.Subject = escapeXmlText(patch.subject)
         if (patch.to !== undefined) {
           msg.ToRecipients.Clear()
-          for (const addr of patch.to) msg.ToRecipients.Add(addr)
+          for (const addr of patch.to) msg.ToRecipients.Add(toEwsEmailAddress(addr))
         }
         if (patch.cc !== undefined) {
           msg.CcRecipients.Clear()
-          for (const addr of patch.cc) msg.CcRecipients.Add(addr)
+          for (const addr of patch.cc) msg.CcRecipients.Add(toEwsEmailAddress(addr))
         }
         if (patch.bcc !== undefined) {
           msg.BccRecipients.Clear()
-          for (const addr of patch.bcc) msg.BccRecipients.Add(addr)
+          for (const addr of patch.bcc) msg.BccRecipients.Add(toEwsEmailAddress(addr))
         }
         if (patch.bodyHtml !== undefined) {
           msg.Body = new ews.MessageBody(ews.BodyType.HTML, escapeXmlText(patch.bodyHtml))
@@ -692,7 +823,9 @@ export function createEwsClient(options = {}) {
           msg.IsRead = isRead
         }
         if (typeof isFlagged === 'boolean') {
-          msg.Flag.FlagStatus = isFlagged ? ews.ItemFlagStatus.Flagged : ews.ItemFlagStatus.NotFlagged
+          const flag = safeProp(() => msg.Flag, null) ?? new ews.Flag()
+          flag.FlagStatus = isFlagged ? ews.ItemFlagStatus.Flagged : ews.ItemFlagStatus.NotFlagged
+          msg.Flag = flag
         }
         await msg.Update(ews.ConflictResolutionMode.AlwaysOverwrite)
         return { updated: true }

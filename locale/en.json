@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Mail Assistant",
-    "description": "Connect to on-premises Microsoft Exchange via EWS (NTLM) for folder-scoped email search, reading, thread tracking, Jira and todo extraction, and draft-only composition triggered on demand via @mail."
+    "description": "On-premises Exchange (EWS + NTLM) mail assistant with folder privacy controls, thread & Jira/todo insights, and draft-only composition via @mail."
   }
 }

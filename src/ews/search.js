@@ -233,12 +233,21 @@ export async function listRecentEmails({ ewsClient, state, limits, args = {}, si
         sinceIso,
         unreadOnly: Boolean(args.unread_only),
         importantOnly: Boolean(args.important_only),
+        unreadOrImportant: Boolean(args.unread_or_important),
         limit,
       },
       signal,
     )
     for (const item of items) {
       if (!item.id || seenIds.has(item.id)) continue
+      const isRead = Boolean(item.isRead ?? item.is_read)
+      const isHigh = String(item.importance ?? '').toLowerCase() === 'high'
+      if (args.unread_or_important) {
+        if (isRead && !isHigh) continue
+      } else {
+        if (args.unread_only && isRead) continue
+        if (args.important_only && !isHigh) continue
+      }
       seenIds.add(item.id)
       merged.push(buildEmailSummary(item, folder.path))
     }

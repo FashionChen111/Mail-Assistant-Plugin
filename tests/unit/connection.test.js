@@ -8,6 +8,10 @@ import {
   mapEwsError,
   withRetry,
   createEwsTransport,
+  escapeXmlText,
+  toEwsEmailAddress,
+  buildSearchFilter,
+  buildAqsQueryString,
 } from '../../src/ews/connection.js'
 
 test('formatNtlmUsername supports DOMAIN\\user, email login, and already-qualified names', () => {
@@ -160,4 +164,65 @@ test('withRetry retries 3 times on RATE_001 with 1s/2s/4s delays, never retries 
     (err) => err === customAbort && !(err instanceof ExchangeError),
   )
   assert.equal(abortAttempts, 1)
+
+  // 5. Aborting an in-flight hung EWS request rejects immediately with raw AbortError
+  const inflightAc = new AbortController()
+  const inflightReason = new DOMException('inflight cancelled', 'AbortError')
+  const t0 = Date.now()
+  const inflightPromise = withRetry(
+    () => new Promise(() => {}), // never settles
+    { signal: inflightAc.signal, delaysMs: [10] },
+  )
+  setTimeout(() => inflightAc.abort(inflightReason), 15)
+  await assert.rejects(
+    () => inflightPromise,
+    (err) => err === inflightReason && !(err instanceof ExchangeError),
+  )
+  assert.ok(Date.now() - t0 < 500, 'in-flight abort must settle promptly')
+})
+
+test('escapeXmlText, toEwsEmailAddress, buildSearchFilter, and buildAqsQueryString emit valid Exchange EWS primitives', () => {
+  assert.equal(
+    escapeXmlText(`A & B <c> "d" 'e'`),
+    'A &amp; B &lt;c&gt; &quot;d&quot; &apos;e&apos;',
+  )
+
+  const named = toEwsEmailAddress('Alice & Bob <alice@corp.com>')
+  assert.equal(named.Name, 'Alice &amp; Bob')
+  assert.equal(named.Address, 'alice@corp.com')
+
+  const quoted = toEwsEmailAddress('"PM, Cert" <pm@corp.com>')
+  assert.equal(quoted.Name, 'PM, Cert')
+  assert.equal(quoted.Address, 'pm@corp.com')
+
+  const bare = toEwsEmailAddress('bob@corp.com')
+  assert.equal(bare.Name, null)
+  assert.equal(bare.Address, 'bob@corp.com')
+
+  // buildSearchFilter must use string "High" for Importance and support unreadOrImportant
+  const impFilter = buildSearchFilter({ importantOnly: true })
+  assert.equal(impFilter.Value, 'High')
+
+  const orFilter = buildSearchFilter({ unreadOrImportant: true })
+  assert.ok(orFilter && orFilter.Count === 2)
+
+  // buildAqsQueryString handles query, from, quotes, flags, and date bounds cleanly
+  const aqs = buildAqsQueryString({
+    query: 'say "hello" & bye',
+    from: 'alice@corp.com',
+    to: 'pm@corp.com',
+    subject: 'Widevine',
+    unreadOnly: true,
+    importantOnly: true,
+    sinceIso: '2026-11-01T00:00:00.000Z',
+    untilIso: '2026-11-25T23:59:59.999Z',
+  })
+  assert.ok(aqs.includes('from:&quot;alice@corp.com&quot;'))
+  assert.ok(aqs.includes('to:&quot;pm@corp.com&quot;'))
+  assert.ok(aqs.includes('subject:&quot;Widevine&quot;'))
+  assert.ok(aqs.includes('isread:false'))
+  assert.ok(aqs.includes('importance:high'))
+  assert.ok(aqs.includes('received&gt;=2026-11-01T00:00:00Z'))
+  assert.ok(aqs.includes('received&lt;=2026-11-25T23:59:59Z'))
+  assert.doesNotMatch(aqs, /"hello"/) // inner double quotes sanitized before AQS quoting
 })

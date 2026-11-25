@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Mail Assistant 邮箱助理",
-    "description": "通过 EWS (NTLM) 接入自建 Microsoft Exchange，按 @mail 会话按需激活，支持文件夹级权限控制、邮件检索与正文读取、线程重建、Jira 与待办启发式提取，以及仅保存草稿不直接发送的安全边界。"
+    "description": "通过 @mail 按需启用自建 Exchange 邮箱助理，支持目录级权限控制、检索/线程追踪、Jira 与待办提取，以及仅保存草稿不直接发送。"
   }
 }

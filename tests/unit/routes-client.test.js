@@ -303,6 +303,32 @@ test('HTTP routes use ctx.get() before property access so Cordis 4 undeclared-se
   }
 })
 
+test('checkTrustFence fails closed with 403 when connection service is unavailable', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-ex-trust-closed-'))
+  try {
+    const statePath = join(dir, 'state.json')
+    const routes = new Map()
+    const ctxNoConn = {
+      webServer: {
+        register(route) { routes.set(route.path, route); return () => {} },
+      },
+      effect(fn) { return fn() },
+    }
+    registerExchangeRoutes(ctxNoConn, {
+      statePath,
+      config: { maxSearchResults: 100, maxAttachmentMb: 25, maxBodyChars: 20000, requestTimeoutSeconds: 30, requestTimeoutMs: 30000, explicitPrefix: '@mail' },
+      env: {},
+    })
+    for (const [path, method] of [[ROUTE_PATHS.status, 'GET'], [ROUTE_PATHS.probe, 'POST'], [ROUTE_PATHS.save, 'POST']]) {
+      const { req, res } = createMockReqRes({ method, headers: { 'content-type': 'application/json' }, body: '{}' })
+      await routes.get(path).handler(req, res)
+      assert.equal(res._read().statusCode, 403, `${path} must fail closed when connection service is absent`)
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('client.js registers via __ModuleLoader__, uses only react, wires settings.section, icon, bundle config, and @mail trigger', async () => {
   const clientCode = await readFile(resolve(import.meta.dirname, '../../client.js'), 'utf8')
   let loaded = null
@@ -315,6 +341,7 @@ test('client.js registers via __ModuleLoader__, uses only react, wires settings.
     console,
     setTimeout,
     clearTimeout,
+    URL,
   }
   vm.runInNewContext(clientCode, sandbox, { filename: 'client.js' })
   assert.ok(loaded, 'client.js must call window.__ModuleLoader__.load')
@@ -327,6 +354,7 @@ test('client.js registers via __ModuleLoader__, uses only react, wires settings.
     useEffect() {},
     useCallback(fn) { return fn },
     useMemo(fn) { return fn() },
+    useRef(init) { return { current: init } },
   }
   const plugin = loaded.factory((spec) => {
     requiredModules.push(spec)
@@ -387,16 +415,55 @@ test('client.js registers via __ModuleLoader__, uses only react, wires settings.
   assert.equal(hitsAll[0].name, 'mail')
   const hitsSub = await registeredTrigger.candidates({ sessionId: 's1' }, { query: 'ma', quoted: false })
   assert.equal(hitsSub.length, 1)
-  const hitsMiss = await registeredTrigger.candidates({ sessionId: 's1' }, { query: 'zzz', quoted: false })
-  assert.equal(hitsMiss.length, 0)
+  // Prefix matching ONLY: single letters inside "mail" like "a", "i", "l" must NOT hijack file mentions (UX I7)
+  for (const nonPrefix of ['a', 'i', 'l', 'ail', 'zzz']) {
+    const hitsNon = await registeredTrigger.candidates({ sessionId: 's1' }, { query: nonPrefix, quoted: false })
+    assert.equal(hitsNon.length, 0, `query "${nonPrefix}" should not trigger @mail`)
+  }
   const hitsQuoted = await registeredTrigger.candidates({ sessionId: 's1' }, { query: 'mail', quoted: true })
   assert.equal(hitsQuoted.length, 0)
 
-  // Verify parent->child folder cascade helper exported for testability
+  // Verify BundleConfigWrapper passes hideHeader: true (UX I1)
+  const bundleReg = slotRegistrations.find((r) => r.opts.name === 'plugins.bundle.config')
+  const renderedBundle = bundleReg.component({ view: 'detail', t: (k) => k })
+  assert.equal(renderedBundle.props.hideHeader, true)
+
+  // Verify parent->child folder cascade & UX review helpers exported for testability
   assert.equal(typeof plugin.__toggleFolderSelection, 'function')
   const allFolders = ['收件箱', '认证项目', '认证项目/Widevine', '认证项目/AirPlay2', '人事资料']
   const checked = [...plugin.__toggleFolderSelection([], '认证项目', true, allFolders)]
   assert.deepEqual(checked, ['认证项目', '认证项目/Widevine', '认证项目/AirPlay2'])
   const unchecked = [...plugin.__toggleFolderSelection(checked, '认证项目', false, allFolders)]
   assert.deepEqual(unchecked, [])
+
+  // UX I5: Segment-by-segment tree sort keeps parent + children contiguous before hyphenated siblings
+  assert.equal(typeof plugin.__sortFolderPaths, 'function')
+  const sorted = [...plugin.__sortFolderPaths(['认证项目-归档', '认证项目/Widevine', '认证项目', '认证项目/AirPlay2'])]
+  assert.deepEqual(sorted, ['认证项目', '认证项目/AirPlay2', '认证项目/Widevine', '认证项目-归档'])
+
+  // UX C5: Inherited blacklist ancestor detection & whitelist indeterminate parent state
+  assert.equal(typeof plugin.__getAncestorBlockedPath, 'function')
+  assert.equal(plugin.__getAncestorBlockedPath('认证项目/Widevine', new Set(['认证项目'])), '认证项目')
+  assert.equal(plugin.__getAncestorBlockedPath('认证项目', new Set(['认证项目'])), null)
+  assert.equal(typeof plugin.__isFolderIndeterminate, 'function')
+  assert.equal(
+    plugin.__isFolderIndeterminate('认证项目', 'whitelist', new Set(['认证项目/Widevine']), allFolders),
+    true,
+  )
+  assert.equal(
+    plugin.__isFolderIndeterminate('认证项目', 'whitelist', new Set(['认证项目', '认证项目/Widevine']), allFolders),
+    false,
+  )
+
+  // UX I2: Client-side HTTPS validation and localized error mapping
+  assert.equal(typeof plugin.__validateClientServerUrl, 'function')
+  assert.equal(plugin.__validateClientServerUrl('http://mail.corp/EWS/Exchange.asmx'), 'errHttpsOnly')
+  assert.equal(plugin.__validateClientServerUrl('not-a-url'), 'errInvalidUrl')
+  assert.equal(plugin.__validateClientServerUrl('https://mail.corp/EWS/Exchange.asmx'), null)
+
+  assert.equal(typeof plugin.__formatApiError, 'function')
+  const enT = (key) => registeredLocales['dsh-exchange'].en[key] ?? key
+  assert.match(plugin.__formatApiError({ error: 'AUTH_001', message: '中文报错' }, 401, enT), /Authentication failed/i)
+  assert.match(plugin.__formatApiError({ error: 'NET_001', details: { protocol: 'http:' }, message: '中文' }, 400, enT), /HTTPS/i)
+  assert.match(plugin.__formatApiError({ error: 'NET_001', details: { category: 'tls' }, message: '中文' }, 502, enT), /certificate|TLS/i)
 })

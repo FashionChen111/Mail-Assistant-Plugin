@@ -90,7 +90,10 @@ function getService(ctx, name) {
 function checkTrustFence(ctx, req, res) {
   const conn = getService(ctx, 'connection')
   if (!conn || typeof conn.requestRejection !== 'function') {
-    return false
+    res.statusCode = 403
+    res.setHeader('cache-control', 'no-store')
+    res.end()
+    return true
   }
   const rejection = conn.requestRejection(req)
   if (rejection === undefined) return false

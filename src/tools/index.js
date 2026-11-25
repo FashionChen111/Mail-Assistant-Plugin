@@ -672,6 +672,10 @@ export function createExchangeTools({
             }
             const includeUnread = args.include_unread !== false
             const includeImportant = args.include_important !== false
+            if (!includeUnread && !includeImportant) {
+              setAuditMeta({ count: 0 })
+              return { todos: [] }
+            }
             const ewsClient = await getClient()
             const recent = await listRecentEmails({
               ewsClient,
@@ -681,6 +685,7 @@ export function createExchangeTools({
                 days: args.days ?? 7,
                 unread_only: includeUnread && !includeImportant,
                 important_only: !includeUnread && includeImportant,
+                unread_or_important: includeUnread && includeImportant,
                 limit: Math.min(50, config.maxSearchResults),
               },
               signal: exec.signal,
@@ -806,7 +811,10 @@ export function createExchangeTools({
                 reason: 'emergency_lock',
               })
             }
-            const days = args.days ?? 30
+            const days = args.days === undefined || args.days === null ? 30 : Math.trunc(Number(args.days))
+            if (!Number.isFinite(days) || days < 1 || days > 90) {
+              throw new ToolArgsError(['days 必须为 1–90 之间的整数'])
+            }
             const ewsClient = await getClient()
             const recent = await listRecentEmails({
               ewsClient,
@@ -849,14 +857,22 @@ export function createExchangeTools({
                   throw err
                 }
               }
-              const detail = await readEmail({
-                ewsClient,
-                state,
-                limits: config,
-                args: { email_id: item.id, mark_as_read: false },
-                signal: exec.signal,
-              })
-              detailById.set(detail.id, detail)
+              try {
+                const detail = await readEmail({
+                  ewsClient,
+                  state,
+                  limits: config,
+                  args: { email_id: item.id, mark_as_read: false },
+                  signal: exec.signal,
+                })
+                detailById.set(detail.id, detail)
+              } catch (err) {
+                if (isAbortError(err) || exec.signal?.aborted) throw err
+                if (err instanceof ExchangeError && err.code === ERROR_CODES.PERM_001) {
+                  continue
+                }
+                throw err
+              }
             }
 
             const summary = summarizeProjectEmails({

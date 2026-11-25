@@ -5,7 +5,7 @@ import { createSessionScope } from './src/scope.js'
 import { createExchangeTools, registerExchangeTools } from './src/tools/index.js'
 
 export const name = 'dsh-exchange'
-export const inject = ['tools', 'sessionProjections', 'credentials', 'systemPrompt']
+export const inject = ['tools', 'sessionProjections', 'systemPrompt']
 export { Config }
 
 export async function apply(ctx, rawConfig = {}) {

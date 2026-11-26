@@ -9,9 +9,10 @@ import vm from 'node:vm'
 import { ROUTE_PATHS, registerExchangeRoutes } from '../../src/routes.js'
 import { readState } from '../../src/state.js'
 
-function createMockReqRes({ method = 'GET', headers = {}, body = '' } = {}) {
+function createMockReqRes({ method = 'GET', url = '', headers = {}, body = '' } = {}) {
   const req = new EventEmitter()
   req.method = method
+  req.url = url
   req.headers = headers
   req.resume = () => {}
   req[Symbol.asyncIterator] = async function* () {
@@ -337,10 +338,159 @@ test('checkTrustFence fails closed with 403 when connection service is unavailab
       config: { maxSearchResults: 100, maxAttachmentMb: 25, maxBodyChars: 20000, requestTimeoutSeconds: 30, requestTimeoutMs: 30000, explicitPrefix: '@mail' },
       env: {},
     })
-    for (const [path, method] of [[ROUTE_PATHS.status, 'GET'], [ROUTE_PATHS.probe, 'POST'], [ROUTE_PATHS.save, 'POST']]) {
+    for (const [path, method] of [
+      [ROUTE_PATHS.status, 'GET'],
+      [ROUTE_PATHS.probe, 'POST'],
+      [ROUTE_PATHS.save, 'POST'],
+      [ROUTE_PATHS.history, 'GET'],
+      [ROUTE_PATHS.historyClear, 'POST'],
+    ]) {
       const { req, res } = createMockReqRes({ method, headers: { 'content-type': 'application/json' }, body: '{}' })
       await routes.get(path).handler(req, res)
       assert.equal(res._read().statusCode, 403, `${path} must fail closed when connection service is absent`)
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('HTTP history routes serve merged activity/audit records with filtering and clear without touching audit.jsonl', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-ex-history-routes-'))
+  try {
+    const statePath = join(dir, 'state.json')
+    const auditPath = join(dir, 'audit.jsonl')
+    const activityPath = join(dir, 'activity.jsonl')
+    const { createAuditLogger } = await import('../../src/security/audit.js')
+    const { createActivityLogger } = await import('../../src/activity.js')
+
+    const audit = createAuditLogger(auditPath)
+    const activity = createActivityLogger(activityPath)
+    await audit.log({
+      ts: '2026-11-26T08:00:00.000Z',
+      action: 'list_folders',
+      outcome: 'ok',
+      count: 43,
+      elapsedMs: 55,
+    })
+    await activity.log({
+      ts: '2026-11-26T09:00:00.000Z',
+      action: 'read_email',
+      folder: '收件箱',
+      emailId: 'm1',
+      outcome: 'ok',
+      elapsedMs: 90,
+      summary: { subject: 'Widevine Cert Update', from: 'partner@google.com' },
+    })
+    await activity.log({
+      ts: '2026-11-26T09:10:00.000Z',
+      action: 'save_draft',
+      folder: '草稿箱',
+      emailId: 'd1',
+      outcome: 'ok',
+      elapsedMs: 120,
+      summary: { subject: 'Re: Widevine Cert Update', to: ['partner@google.com'], toCount: 1, bodyChars: 210 },
+    })
+
+    const routes = new Map()
+    let rejectCode = undefined
+    const ctx = {
+      webServer: {
+        register(route) { routes.set(route.path, route); return () => routes.delete(route.path) },
+      },
+      connection: {
+        requestRejection() { return rejectCode },
+      },
+      credentials: {
+        async readRecord() { return undefined },
+        async describeRecord() { return { configured: false, writable: true } },
+      },
+      effect(fn) { return fn() },
+    }
+    registerExchangeRoutes(ctx, {
+      statePath,
+      auditPath,
+      activityPath,
+      config: { maxSearchResults: 100, maxAttachmentMb: 25, maxBodyChars: 20000, requestTimeoutSeconds: 30, requestTimeoutMs: 30000, explicitPrefix: '@mail' },
+      env: {},
+    })
+
+    assert.equal(routes.has(ROUTE_PATHS.history), true)
+    assert.equal(routes.has(ROUTE_PATHS.historyClear), true)
+
+    // Trust fence rejection
+    rejectCode = 401
+    {
+      const { req, res } = createMockReqRes({ method: 'GET', url: '/dsh-exchange/api/history' })
+      await routes.get(ROUTE_PATHS.history).handler(req, res)
+      assert.equal(res._read().statusCode, 401)
+    }
+    rejectCode = undefined
+
+    // Method not allowed checks
+    {
+      const { req, res } = createMockReqRes({ method: 'POST', url: '/dsh-exchange/api/history' })
+      await routes.get(ROUTE_PATHS.history).handler(req, res)
+      assert.equal(res._read().statusCode, 405)
+    }
+    {
+      const { req, res } = createMockReqRes({ method: 'GET', url: '/dsh-exchange/api/history/clear' })
+      await routes.get(ROUTE_PATHS.historyClear).handler(req, res)
+      assert.equal(res._read().statusCode, 405)
+    }
+
+    // GET /history unfiltered
+    {
+      const { req, res } = createMockReqRes({ method: 'GET', url: '/dsh-exchange/api/history?limit=10' })
+      await routes.get(ROUTE_PATHS.history).handler(req, res)
+      const out = res._read()
+      assert.equal(out.statusCode, 200)
+      assert.equal(out.headers['cache-control'], 'no-store')
+      assert.equal(out.json.ok, true)
+      assert.equal(out.json.total, 3)
+      assert.equal(out.json.stats.draft, 1)
+      assert.equal(out.json.stats.read, 1)
+      assert.equal(out.json.items[0].action, 'save_draft')
+      assert.equal(out.json.items[0].summary.subject, 'Re: Widevine Cert Update')
+    }
+
+    // GET /history filtered by category=draft&q=widevine
+    {
+      const { req, res } = createMockReqRes({ method: 'GET', url: '/dsh-exchange/api/history?category=draft&q=widevine' })
+      await routes.get(ROUTE_PATHS.history).handler(req, res)
+      const out = res._read()
+      assert.equal(out.statusCode, 200)
+      assert.equal(out.json.total, 1)
+      assert.equal(out.json.unfilteredTotal, 3)
+      assert.equal(out.json.items[0].action, 'save_draft')
+    }
+
+    // POST /history/clear requires application/json
+    {
+      const { req, res } = createMockReqRes({ method: 'POST', headers: { 'content-type': 'text/plain' }, body: '{}' })
+      await routes.get(ROUTE_PATHS.historyClear).handler(req, res)
+      assert.equal(res._read().statusCode, 415)
+    }
+
+    // POST /history/clear clears activity history without deleting audit.jsonl
+    const auditBefore = await readFile(auditPath, 'utf8')
+    {
+      const { req, res } = createMockReqRes({ method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+      await routes.get(ROUTE_PATHS.historyClear).handler(req, res)
+      const out = res._read()
+      assert.equal(out.statusCode, 200)
+      assert.equal(out.json.ok, true)
+      assert.ok(typeof out.json.clearedAt === 'string')
+    }
+    assert.equal(await readFile(auditPath, 'utf8'), auditBefore)
+
+    // Subsequent GET /history returns 0 items
+    {
+      const { req, res } = createMockReqRes({ method: 'GET', url: '/dsh-exchange/api/history' })
+      await routes.get(ROUTE_PATHS.history).handler(req, res)
+      const out = res._read()
+      assert.equal(out.statusCode, 200)
+      assert.equal(out.json.total, 0)
+      assert.deepEqual(out.json.items, [])
     }
   } finally {
     await rm(dir, { recursive: true, force: true })

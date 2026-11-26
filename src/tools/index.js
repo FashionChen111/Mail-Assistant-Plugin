@@ -1,4 +1,6 @@
+import { basename, dirname, join } from 'node:path'
 import { defineTool, ToolArgsError } from '@deepseek-ai/dsh-tools'
+import { createActivityLogger } from '../activity.js'
 import { ERROR_CODES, ExchangeError, isAbortError, throwIfAborted } from '../errors.js'
 import { createEwsClient } from '../ews/connection.js'
 import { listFolders } from '../ews/folders.js'
@@ -122,11 +124,13 @@ export function createExchangeTools({
   config,
   statePath,
   auditPath,
+  activityPath = join(dirname(auditPath), 'activity.jsonl'),
   clientFactory = createEwsClient,
   getPasswordFn = getPassword,
   nowFn = () => new Date(),
 }) {
   const audit = createAuditLogger(auditPath)
+  const activity = createActivityLogger(activityPath)
 
   async function buildClientFromState(state) {
     const serverUrl = state.account?.serverUrl
@@ -153,7 +157,7 @@ export function createExchangeTools({
     })
   }
 
-  async function runAudited({ action, folder = null, emailId = null, signal, handler }) {
+  async function runAudited({ action, folder = null, emailId = null, summary = {}, signal, handler }) {
     const start = Date.now()
     throwIfAborted(signal)
     let outcome = 'ok'
@@ -161,6 +165,7 @@ export function createExchangeTools({
     let count
     let resolvedFolder = folder
     let resolvedEmailId = emailId
+    let activitySummary = summary && typeof summary === 'object' ? { ...summary } : {}
 
     try {
       const state = await readState(statePath)
@@ -171,6 +176,11 @@ export function createExchangeTools({
           if (meta.folder !== undefined) resolvedFolder = meta.folder
           if (meta.emailId !== undefined) resolvedEmailId = meta.emailId
           if (meta.count !== undefined) count = meta.count
+        },
+        setActivitySummary(partial) {
+          if (partial && typeof partial === 'object') {
+            activitySummary = { ...activitySummary, ...partial }
+          }
         },
       })
       return result
@@ -193,15 +203,30 @@ export function createExchangeTools({
       throw err
     } finally {
       const elapsedMs = Date.now() - start
-      await audit.log({
-        action,
-        folder: resolvedFolder,
-        emailId: resolvedEmailId,
-        outcome,
-        code,
-        count,
-        elapsedMs,
-      }).catch(() => {})
+      const ts = new Date().toISOString()
+      await Promise.allSettled([
+        audit.log({
+          ts,
+          action,
+          folder: resolvedFolder,
+          emailId: resolvedEmailId,
+          outcome,
+          code,
+          count,
+          elapsedMs,
+        }),
+        activity.log({
+          ts,
+          action,
+          folder: resolvedFolder,
+          emailId: resolvedEmailId,
+          outcome,
+          code,
+          count,
+          elapsedMs,
+          summary: activitySummary,
+        }),
+      ])
     }
   }
 
@@ -241,8 +266,9 @@ export function createExchangeTools({
       async execute(args, exec) {
         return runAudited({
           action: 'list_folders',
+          summary: { readableOnly: Boolean(args.readable_only) },
           signal: exec.signal,
-          async handler({ state, getClient, setAuditMeta }) {
+          async handler({ state, getClient, setAuditMeta, setActivitySummary }) {
             const ewsClient = await getClient()
             const res = await listFolders({
               ewsClient,
@@ -251,6 +277,10 @@ export function createExchangeTools({
               signal: exec.signal,
             })
             setAuditMeta({ count: res.folders.length })
+            setActivitySummary({
+              folderCount: res.folders.length,
+              readableCount: res.folders.filter((f) => f.readable).length,
+            })
             return res
           },
         })
@@ -288,8 +318,19 @@ export function createExchangeTools({
         return runAudited({
           action: 'search_emails',
           folder: args.folder,
+          summary: {
+            query: args.query,
+            from: args.from,
+            toFilter: args.to,
+            subject: args.subject,
+            days: args.days,
+            dateFrom: args.date_from,
+            dateTo: args.date_to,
+            unreadOnly: Boolean(args.unread_only),
+            importantOnly: Boolean(args.important_only),
+          },
           signal: exec.signal,
-          async handler({ state, getClient, setAuditMeta }) {
+          async handler({ state, getClient, setAuditMeta, setActivitySummary }) {
             // Check permission BEFORE even constructing EWS transport if folder is denied.
             const { assertFolderAllowed } = await import('../security/permissions.js')
             const allowedPath = assertFolderAllowed(args.folder, state.access)
@@ -304,6 +345,7 @@ export function createExchangeTools({
               now: nowFn(),
             })
             setAuditMeta({ count: res.emails.length })
+            setActivitySummary({ total: res.total })
             return res
           },
         })
@@ -325,8 +367,9 @@ export function createExchangeTools({
         return runAudited({
           action: 'read_email',
           emailId: args.email_id,
+          summary: { markAsRead: Boolean(args.mark_as_read) },
           signal: exec.signal,
-          async handler({ state, getClient, setAuditMeta }) {
+          async handler({ state, getClient, setAuditMeta, setActivitySummary }) {
             if (state.access.emergencyLock) {
               throw new ExchangeError(ERROR_CODES.PERM_001, '邮箱访问已处于紧急锁定状态，Agent 无权访问任何文件夹', {
                 reason: 'emergency_lock',
@@ -341,6 +384,13 @@ export function createExchangeTools({
               signal: exec.signal,
             })
             setAuditMeta({ folder: detail.folder, emailId: detail.id })
+            setActivitySummary({
+              subject: detail.subject,
+              from: detail.from,
+              receivedTime: detail.received_time,
+              hasAttachments: detail.has_attachments,
+              attachmentCount: Array.isArray(detail.attachments) ? detail.attachments.length : 0,
+            })
             return detail
           },
         })
@@ -368,8 +418,9 @@ export function createExchangeTools({
       async execute(args, exec) {
         return runAudited({
           action: 'list_recent_emails',
+          summary: { days: args.days ?? 7, unreadOnly: Boolean(args.unread_only) },
           signal: exec.signal,
-          async handler({ state, getClient, setAuditMeta }) {
+          async handler({ state, getClient, setAuditMeta, setActivitySummary }) {
             if (state.access.emergencyLock) {
               throw new ExchangeError(ERROR_CODES.PERM_001, '邮箱访问已处于紧急锁定状态，Agent 无权访问任何文件夹', {
                 reason: 'emergency_lock',
@@ -385,6 +436,10 @@ export function createExchangeTools({
               now: nowFn(),
             })
             setAuditMeta({ count: res.emails.length })
+            setActivitySummary({
+              returnedCount: res.emails.length,
+              sampleSubjects: res.emails.slice(0, 3).map((e) => e.subject),
+            })
             return res
           },
         })
@@ -411,9 +466,21 @@ export function createExchangeTools({
         }],
       },
       async execute(args, exec) {
+        const toList = Array.isArray(args.to) ? args.to : []
+        const ccList = Array.isArray(args.cc) ? args.cc : []
+        const bccList = Array.isArray(args.bcc) ? args.bcc : []
         return runAudited({
           action: 'save_draft',
           folder: '草稿箱',
+          summary: {
+            subject: args.subject,
+            to: toList,
+            toCount: toList.length,
+            ccCount: ccList.length,
+            bccCount: bccList.length,
+            isReply: Boolean(args.in_reply_to),
+            bodyChars: typeof args.body_text === 'string' ? args.body_text.length : 0,
+          },
           signal: exec.signal,
           async handler({ state, getClient, setAuditMeta }) {
             if (state.access.emergencyLock) {
@@ -451,10 +518,17 @@ export function createExchangeTools({
         }],
       },
       async execute(args, exec) {
+        const updatedFields = ['to', 'cc', 'bcc', 'subject', 'body_text', 'body_html', 'in_reply_to']
+          .filter((k) => args[k] !== undefined)
         return runAudited({
           action: 'update_draft',
           folder: '草稿箱',
           emailId: args.draft_id,
+          summary: {
+            subject: args.subject,
+            to: Array.isArray(args.to) ? args.to : undefined,
+            updatedFields,
+          },
           signal: exec.signal,
           async handler({ state, getClient }) {
             if (state.access.emergencyLock) {
@@ -490,6 +564,7 @@ export function createExchangeTools({
           action: 'delete_draft',
           folder: '草稿箱',
           emailId: args.draft_id,
+          summary: { recoverable: true },
           signal: exec.signal,
           async handler({ state, getClient }) {
             if (state.access.emergencyLock) {
@@ -525,7 +600,7 @@ export function createExchangeTools({
           action: 'get_thread',
           emailId: args.email_id,
           signal: exec.signal,
-          async handler({ state, getClient, setAuditMeta }) {
+          async handler({ state, getClient, setAuditMeta, setActivitySummary }) {
             if (state.access.emergencyLock) {
               throw new ExchangeError(ERROR_CODES.PERM_001, '邮箱访问已处于紧急锁定状态，Agent 无权访问任何文件夹', {
                 reason: 'emergency_lock',
@@ -540,6 +615,11 @@ export function createExchangeTools({
               signal: exec.signal,
             })
             setAuditMeta({ count: res.emails.length, folder: res.emails[0]?.folder ?? null })
+            const latest = res.emails[res.emails.length - 1] ?? res.emails[0]
+            setActivitySummary({
+              subject: latest?.subject,
+              messageCount: res.emails.length,
+            })
             return res
           },
         })
@@ -584,8 +664,9 @@ export function createExchangeTools({
       async execute(args, exec) {
         return runAudited({
           action: 'parse_jira_notifications',
+          summary: { days: args.days ?? 7, filterByUser: args.filter_by_user !== false },
           signal: exec.signal,
-          async handler({ state, getClient, setAuditMeta }) {
+          async handler({ state, getClient, setAuditMeta, setActivitySummary }) {
             if (state.access.emergencyLock) {
               throw new ExchangeError(ERROR_CODES.PERM_001, '邮箱访问已处于紧急锁定状态，Agent 无权访问任何文件夹', {
                 reason: 'emergency_lock',
@@ -620,6 +701,10 @@ export function createExchangeTools({
               filterByUser: args.filter_by_user !== false,
             })
             setAuditMeta({ count: res.notifications.length })
+            setActivitySummary({
+              matchedCount: res.notifications.length,
+              issueKeys: [...new Set(res.notifications.map((n) => n.issue_key).filter(Boolean))],
+            })
             return res
           },
         })
@@ -663,8 +748,9 @@ export function createExchangeTools({
       async execute(args, exec) {
         return runAudited({
           action: 'extract_todos',
+          summary: { days: args.days ?? 7 },
           signal: exec.signal,
-          async handler({ state, getClient, setAuditMeta }) {
+          async handler({ state, getClient, setAuditMeta, setActivitySummary }) {
             if (state.access.emergencyLock) {
               throw new ExchangeError(ERROR_CODES.PERM_001, '邮箱访问已处于紧急锁定状态，Agent 无权访问任何文件夹', {
                 reason: 'emergency_lock',
@@ -674,6 +760,7 @@ export function createExchangeTools({
             const includeImportant = args.include_important !== false
             if (!includeUnread && !includeImportant) {
               setAuditMeta({ count: 0 })
+              setActivitySummary({ todoCount: 0, urgentCount: 0 })
               return { todos: [] }
             }
             const ewsClient = await getClient()
@@ -705,6 +792,11 @@ export function createExchangeTools({
             }
             const res = extractTodos({ emails: details, now: nowFn() })
             setAuditMeta({ count: res.todos.length })
+            setActivitySummary({
+              todoCount: res.todos.length,
+              urgentCount: res.todos.filter((item) => item.priority === 'urgent' || item.priority === 'high').length,
+              sampleTitles: res.todos.slice(0, 3).map((item) => item.title),
+            })
             return res
           },
         })
@@ -800,8 +892,12 @@ export function createExchangeTools({
       async execute(args, exec) {
         return runAudited({
           action: 'summarize_project',
+          summary: {
+            project: typeof args.project === 'string' ? args.project.trim() : '',
+            days: args.days ?? 30,
+          },
           signal: exec.signal,
-          async handler({ state, getClient, setAuditMeta }) {
+          async handler({ state, getClient, setAuditMeta, setActivitySummary }) {
             const project = typeof args.project === 'string' ? args.project.trim() : ''
             if (!project) {
               throw new ToolArgsError(['project 参数必填且不能为空'])
@@ -882,6 +978,13 @@ export function createExchangeTools({
               now: nowFn(),
             })
             setAuditMeta({ count: summary.related_emails.length })
+            setActivitySummary({
+              project,
+              days,
+              relatedCount: summary.related_emails.length,
+              blockingCount: summary.blocking_issues.length,
+              nextActionCount: summary.next_actions.length,
+            })
             return summary
           },
         })
@@ -913,20 +1016,25 @@ export function createExchangeTools({
           action: 'download_attachment',
           emailId: args.email_id,
           signal: exec.signal,
-          async handler({ state, getClient }) {
+          async handler({ state, getClient, setActivitySummary }) {
             if (state.access.emergencyLock) {
               throw new ExchangeError(ERROR_CODES.PERM_001, '邮箱访问已处于紧急锁定状态，Agent 无权下载附件', {
                 reason: 'emergency_lock',
               })
             }
             const ewsClient = await getClient()
-            return downloadAttachment({
+            const res = await downloadAttachment({
               ewsClient,
               state,
               limits: config,
               args,
               signal: exec.signal,
             })
+            setActivitySummary({
+              fileName: basename(res.file_path),
+              size: res.size,
+            })
+            return res
           },
         })
       },
@@ -954,6 +1062,7 @@ export function createExchangeTools({
           action: 'move_email',
           folder: args.target_folder,
           emailId: args.email_id,
+          summary: { targetFolder: args.target_folder },
           signal: exec.signal,
           async handler({ state, getClient }) {
             const { assertFolderAllowed } = await import('../security/permissions.js')
@@ -987,6 +1096,7 @@ export function createExchangeTools({
         return runAudited({
           action: 'mark_email',
           emailId: args.email_id,
+          summary: { isRead: args.is_read, isFlagged: args.is_flagged },
           signal: exec.signal,
           async handler({ state, getClient }) {
             if (state.access.emergencyLock) {
@@ -1022,6 +1132,7 @@ export function createExchangeTools({
         return runAudited({
           action: 'delete_email',
           emailId: args.email_id,
+          summary: { permanentAttempt: args.permanent === true },
           signal: exec.signal,
           async handler({ state, getClient }) {
             if (args.permanent === true) {

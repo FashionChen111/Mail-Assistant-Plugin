@@ -166,6 +166,108 @@ test('createExchangeTools defines all 15 tools with valid DSH defineTool schemas
     const lines = auditRaw.trim().split('\n').map((l) => JSON.parse(l))
     assert.ok(lines.length >= 16)
     assert.doesNotMatch(auditRaw, /secret-pass|Gentle reminder|Audio sync blocked/)
+
+    // Verify activity.jsonl recorded rich safe summaries for UI history while NEVER leaking passwords, bodies, or base64
+    const activityPath = join(dir, 'activity.jsonl')
+    const activityRaw = await readFile(activityPath, 'utf8')
+    assert.doesNotMatch(activityRaw, /secret-pass|Audio sync blocked|Hi there|aGVsbG8gd29ybGQ=/)
+    const actLines = activityRaw.trim().split('\n').map((l) => JSON.parse(l))
+    assert.ok(actLines.length >= 16)
+
+    const readRec = actLines.find((r) => r.action === 'read_email' && r.outcome === 'ok')
+    assert.ok(readRec)
+    assert.equal(readRec.summary.subject, '[JIRA] (CERT-101) AirPlay2 delay issue')
+    assert.equal(readRec.summary.from, 'jira@company.com')
+
+    const draftRec = actLines.find((r) => r.action === 'save_draft' && r.outcome === 'ok')
+    assert.ok(draftRec)
+    assert.equal(draftRec.summary.subject, 'Gentle reminder')
+    assert.deepEqual(draftRec.summary.to, ['support@apple.com'])
+    assert.equal(draftRec.summary.bodyChars, 'Hi there'.length)
+
+    const updateRec = actLines.find((r) => r.action === 'update_draft' && r.outcome === 'ok')
+    assert.ok(updateRec)
+    assert.equal(updateRec.summary.subject, 'Updated reminder')
+    assert.deepEqual(updateRec.summary.updatedFields, ['subject'])
+
+    const searchRec = actLines.find((r) => r.action === 'search_emails' && r.outcome === 'ok')
+    assert.ok(searchRec)
+    assert.equal(searchRec.summary.query, 'AirPlay2')
+
+    const jiraRec = actLines.find((r) => r.action === 'parse_jira_notifications' && r.outcome === 'ok')
+    assert.ok(jiraRec)
+    assert.deepEqual(jiraRec.summary.issueKeys, ['CERT-101'])
+
+    const projRec = actLines.find((r) => r.action === 'summarize_project' && r.outcome === 'ok')
+    assert.ok(projRec)
+    assert.equal(projRec.summary.project, 'AirPlay2')
+    assert.equal(projRec.summary.relatedCount, 1)
+
+    const attRec = actLines.find((r) => r.action === 'download_attachment' && r.outcome === 'ok')
+    assert.ok(attRec)
+    assert.equal(attRec.summary.fileName, 'report.txt')
+    assert.equal(attRec.summary.size, 11)
+
+    const deniedDelRec = actLines.find((r) => r.action === 'delete_email' && r.outcome === 'denied')
+    assert.ok(deniedDelRec)
+    assert.equal(deniedDelRec.code, 'PERM_001')
+    assert.equal(deniedDelRec.summary.permanentAttempt, true)
+
+    // Verify denied read_email (PERM_001) NEVER records forbidden email subject or sender in activity.jsonl
+    const hrClient = {
+      ...fakeClient,
+      async getItem(id) {
+        if (id === 'email-hr') {
+          return {
+            id: 'email-hr',
+            parentFolderId: 'f-hr',
+            conversationId: 'conv-hr',
+            messageId: '<hr@corp>',
+            references: [],
+            from: 'hr-secret@company.com',
+            to: ['me@company.com'],
+            cc: [],
+            subject: 'CONFIDENTIAL SALARY LETTER',
+            bodyText: 'TOP SECRET COMP',
+            bodyHtml: null,
+            receivedTime: '2026-11-24T10:00:00.000Z',
+            sentTime: '2026-11-24T10:00:00.000Z',
+            isRead: false,
+            isDraft: false,
+            isFlagged: false,
+            importance: 'normal',
+            hasAttachments: false,
+            attachments: [],
+          }
+        }
+        return fakeClient.getItem(id)
+      },
+    }
+    const hrTools = createExchangeTools({
+      ctx: {},
+      config: {
+        maxSearchResults: 100,
+        maxAttachmentMb: 25,
+        maxAttachmentBytes: 25 * 1024 * 1024,
+        maxBodyChars: 20000,
+        requestTimeoutSeconds: 30,
+        requestTimeoutMs: 30000,
+        explicitPrefix: '@mail',
+        dataDir: dir,
+      },
+      statePath,
+      auditPath,
+      activityPath,
+      clientFactory: () => hrClient,
+      getPasswordFn: async () => 'secret-pass',
+    })
+    const hrRead = hrTools.find((t) => t.name === 'exchange_read_email')
+    await assert.rejects(
+      () => hrRead.execute({ email_id: 'email-hr' }, exec),
+      (err) => err instanceof ExchangeError && err.code === ERROR_CODES.PERM_001,
+    )
+    const activityAfterHr = await readFile(activityPath, 'utf8')
+    assert.doesNotMatch(activityAfterHr, /CONFIDENTIAL SALARY LETTER|hr-secret@company\.com|TOP SECRET COMP/)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

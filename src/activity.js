@@ -230,7 +230,7 @@ function buildSearchHaystack(rec) {
 
 export function createActivityLogger(
   activityPath,
-  { maxEntries = MAX_ACTIVITY_ENTRIES, compactThreshold = maxEntries + DEFAULT_COMPACT_EXTRA } = {},
+  { auditPath = null, maxEntries = MAX_ACTIVITY_ENTRIES, compactThreshold = maxEntries + DEFAULT_COMPACT_EXTRA } = {},
 ) {
   const effectiveMax = Math.max(1, Math.trunc(Number(maxEntries) || MAX_ACTIVITY_ENTRIES))
   const effectiveThreshold = Math.max(effectiveMax + 1, Math.trunc(Number(compactThreshold) || effectiveMax + DEFAULT_COMPACT_EXTRA))
@@ -278,9 +278,24 @@ export function createActivityLogger(
       })
       return formatted
     },
-    async clear(nowIso = new Date().toISOString()) {
-      const clearedAt = typeof nowIso === 'string' && nowIso ? nowIso : new Date().toISOString()
+    async clear(nowIso) {
+      const explicitNow = typeof nowIso === 'string' && nowIso ? nowIso : null
+      let clearedAt = explicitNow ?? new Date().toISOString()
       await enqueuePathWrite(activityPath, async () => {
+        if (!explicitNow && auditPath) {
+          // Guard against backward system clock skew: ensure watermark covers all existing audit records.
+          let maxEpoch = parseEpoch(clearedAt)
+          const auditRaw = await readTextIfExists(auditPath)
+          for (const row of parseJsonlSafe(auditRaw)) {
+            if (typeof row.ts === 'string') {
+              const ep = parseEpoch(row.ts)
+              if (ep > maxEpoch) maxEpoch = ep
+            }
+          }
+          if (maxEpoch > parseEpoch(clearedAt)) {
+            clearedAt = new Date(maxEpoch).toISOString()
+          }
+        }
         writesSinceCompactCheck = 0
         await atomicWriteFile0600(activityPath, `${JSON.stringify({ _meta: 'cleared', clearedAt })}\n`)
       })

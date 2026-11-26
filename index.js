@@ -12,6 +12,7 @@ export async function apply(ctx, rawConfig = {}) {
   const config = resolveConfig(rawConfig)
   const statePath = join(config.dataDir, 'state.json')
   const auditPath = join(config.dataDir, 'audit.jsonl')
+  const activityPath = join(config.dataDir, 'activity.jsonl')
 
   const scope = await createSessionScope(ctx, { explicitPrefix: config.explicitPrefix })
   const tools = createExchangeTools({
@@ -19,6 +20,7 @@ export async function apply(ctx, rawConfig = {}) {
     config,
     statePath,
     auditPath,
+    activityPath,
   })
 
   const disposeTools = registerExchangeTools(ctx, { tools, scope })
@@ -32,9 +34,9 @@ export async function apply(ctx, rawConfig = {}) {
   // Optional web carrier routes (skipped cleanly in headless/ACP profiles without webServer).
   if (typeof ctx.inject === 'function') {
     ctx.inject(['webServer', 'connection', 'credentials'], (webCtx) => {
-      registerExchangeRoutes(webCtx, { statePath, config })
+      registerExchangeRoutes(webCtx, { statePath, auditPath, activityPath, config })
     })
   } else if (ctx.webServer) {
-    registerExchangeRoutes(ctx, { statePath, config })
+    registerExchangeRoutes(ctx, { statePath, auditPath, activityPath, config })
   }
 }

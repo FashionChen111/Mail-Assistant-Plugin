@@ -1,3 +1,5 @@
+import { dirname, join } from 'node:path'
+import { createActivityLogger, readActivityHistory } from './activity.js'
 import { ERROR_CODES, ExchangeError } from './errors.js'
 import { createEwsClient, mapEwsError } from './ews/connection.js'
 import { fetchMailFolders } from './ews/folders.js'
@@ -16,6 +18,8 @@ export const ROUTE_PATHS = Object.freeze({
   status: '/dsh-exchange/api/status',
   probe: '/dsh-exchange/api/probe',
   save: '/dsh-exchange/api/save',
+  history: '/dsh-exchange/api/history',
+  historyClear: '/dsh-exchange/api/history/clear',
 })
 
 const MAX_BODY_BYTES = 64 * 1024
@@ -118,13 +122,21 @@ function httpStatusForError(err) {
 
 export function registerExchangeRoutes(
   ctx,
-  { statePath, config, env = process.env, clientFactory = createEwsClient },
+  {
+    statePath,
+    auditPath = join(dirname(statePath), 'audit.jsonl'),
+    activityPath = join(dirname(statePath), 'activity.jsonl'),
+    config,
+    env = process.env,
+    clientFactory = createEwsClient,
+  },
 ) {
   const webServer = getService(ctx, 'webServer')
   if (!webServer || typeof webServer.register !== 'function') {
     return () => {}
   }
 
+  const activityLogger = createActivityLogger(activityPath, { auditPath })
   const disposers = []
 
   const registerRoute = (label, route) => {
@@ -321,6 +333,74 @@ export function registerExchangeRoutes(
           state: saved,
           passwordSet: passDesc.configured,
           passwordSource: passDesc.source,
+        })
+      } catch (err) {
+        const mapped = err instanceof ExchangeError ? err : mapEwsError(err)
+        sendJson(res, httpStatusForError(mapped), {
+          ok: false,
+          error: mapped.code,
+          message: mapped.message,
+          details: mapped.details,
+        })
+      }
+    },
+  })
+
+  // 4. GET /dsh-exchange/api/history
+  registerRoute('dsh-exchange: GET /dsh-exchange/api/history', {
+    kind: 'exact',
+    path: ROUTE_PATHS.history,
+    async handler(req, res) {
+      if (checkTrustFence(ctx, req, res)) return
+      if (req.method !== 'GET') {
+        sendMethodNotAllowed(res, 'GET')
+        return
+      }
+      try {
+        const parsedUrl = new URL(req.url || ROUTE_PATHS.history, 'http://localhost')
+        const sp = parsedUrl.searchParams
+        const result = await readActivityHistory({
+          activityPath,
+          auditPath,
+          limit: sp.get('limit') ?? 50,
+          offset: sp.get('offset') ?? 0,
+          category: sp.get('category') ?? 'all',
+          outcome: sp.get('outcome') ?? 'all',
+          q: sp.get('q') ?? '',
+        })
+        sendJson(res, 200, {
+          ok: true,
+          ...result,
+        })
+      } catch (err) {
+        const mapped = err instanceof ExchangeError ? err : mapEwsError(err)
+        sendJson(res, httpStatusForError(mapped), {
+          ok: false,
+          error: mapped.code,
+          message: mapped.message,
+          details: mapped.details,
+        })
+      }
+    },
+  })
+
+  // 5. POST /dsh-exchange/api/history/clear
+  registerRoute('dsh-exchange: POST /dsh-exchange/api/history/clear', {
+    kind: 'exact',
+    path: ROUTE_PATHS.historyClear,
+    async handler(req, res) {
+      if (checkTrustFence(ctx, req, res)) return
+      if (req.method !== 'POST') {
+        sendMethodNotAllowed(res, 'POST')
+        return
+      }
+      const body = await readBoundedJsonBody(req, res)
+      if (!body) return
+      try {
+        const { clearedAt } = await activityLogger.clear()
+        sendJson(res, 200, {
+          ok: true,
+          clearedAt,
         })
       } catch (err) {
         const mapped = err instanceof ExchangeError ? err : mapEwsError(err)

@@ -356,8 +356,18 @@ export function registerExchangeRoutes(
         sendMethodNotAllowed(res, 'GET')
         return
       }
+      let parsedUrl
       try {
-        const parsedUrl = new URL(req.url || ROUTE_PATHS.history, 'http://localhost')
+        parsedUrl = new URL(req.url || ROUTE_PATHS.history, 'http://localhost')
+      } catch {
+        sendJson(res, 400, {
+          ok: false,
+          error: 'BAD_REQUEST',
+          message: 'invalid history query URL',
+        })
+        return
+      }
+      try {
         const sp = parsedUrl.searchParams
         const result = await readActivityHistory({
           activityPath,
@@ -372,13 +382,11 @@ export function registerExchangeRoutes(
           ok: true,
           ...result,
         })
-      } catch (err) {
-        const mapped = err instanceof ExchangeError ? err : mapEwsError(err)
-        sendJson(res, httpStatusForError(mapped), {
+      } catch {
+        sendJson(res, 500, {
           ok: false,
-          error: mapped.code,
-          message: mapped.message,
-          details: mapped.details,
+          error: 'INTERNAL_ERROR',
+          message: 'Failed to read local activity history',
         })
       }
     },
@@ -402,13 +410,11 @@ export function registerExchangeRoutes(
           ok: true,
           clearedAt,
         })
-      } catch (err) {
-        const mapped = err instanceof ExchangeError ? err : mapEwsError(err)
-        sendJson(res, httpStatusForError(mapped), {
+      } catch {
+        sendJson(res, 500, {
           ok: false,
-          error: mapped.code,
-          message: mapped.message,
-          details: mapped.details,
+          error: 'INTERNAL_ERROR',
+          message: 'Failed to clear local activity history',
         })
       }
     },

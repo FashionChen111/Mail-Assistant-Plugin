@@ -136,7 +136,7 @@ function sanitizeSummary(raw) {
 export function formatActivityRecord(entry = {}) {
   const ts = typeof entry.ts === 'string' && entry.ts ? entry.ts : new Date().toISOString()
   const action = cleanString(entry.action, 64) ?? 'unknown'
-  const category = ACTION_CATEGORIES[action] ?? 'search'
+  const category = Object.hasOwn(ACTION_CATEGORIES, action) ? ACTION_CATEGORIES[action] : 'search'
   const outcome = entry.outcome === 'ok' || entry.outcome === 'denied' || entry.outcome === 'error'
     ? entry.outcome
     : 'error'
@@ -159,6 +159,10 @@ export function formatActivityRecord(entry = {}) {
     record.count = Math.max(0, Math.trunc(Number(entry.count)))
   }
   return record
+}
+
+function isValidIsoTimestamp(ts) {
+  return typeof ts === 'string' && ts.length > 0 && Number.isFinite(Date.parse(ts))
 }
 
 async function ensureParentDir(filePath) {
@@ -242,15 +246,16 @@ export function createActivityLogger(
     let clearedAt = null
     const records = []
     for (const row of rows) {
-      if (row._meta === 'cleared' && typeof row.clearedAt === 'string') {
+      if (row._meta === 'cleared' && isValidIsoTimestamp(row.clearedAt)) {
         if (!clearedAt || parseEpoch(row.clearedAt) > parseEpoch(clearedAt)) {
           clearedAt = row.clearedAt
         }
-      } else if (typeof row.action === 'string') {
+        records.length = 0
+      } else if (typeof row.action === 'string' && isValidIsoTimestamp(row.ts)) {
         records.push(row)
       }
     }
-    if (records.length <= effectiveMax) return
+    if (records.length < effectiveThreshold) return
     const kept = records.slice(-effectiveMax)
     const lines = []
     if (clearedAt) {
@@ -279,22 +284,34 @@ export function createActivityLogger(
       return formatted
     },
     async clear(nowIso) {
-      const explicitNow = typeof nowIso === 'string' && nowIso ? nowIso : null
-      let clearedAt = explicitNow ?? new Date().toISOString()
+      const explicitNow = isValidIsoTimestamp(nowIso) ? nowIso : null
+      let clearedAt = explicitNow ?? ''
       await enqueuePathWrite(activityPath, async () => {
-        if (!explicitNow && auditPath) {
-          // Guard against backward system clock skew: ensure watermark covers all existing audit records.
-          let maxEpoch = parseEpoch(clearedAt)
-          const auditRaw = await readTextIfExists(auditPath)
-          for (const row of parseJsonlSafe(auditRaw)) {
-            if (typeof row.ts === 'string') {
+        if (explicitNow) {
+          clearedAt = explicitNow
+        } else {
+          let maxEpoch = Date.now()
+          // Preserve any higher prior clearedAt watermark in activity.jsonl and cover existing audit.jsonl under backward clock skew.
+          const [prevActivityRaw, auditRaw] = await Promise.all([
+            readTextIfExists(activityPath),
+            readTextIfExists(auditPath),
+          ])
+          for (const row of parseJsonlSafe(prevActivityRaw)) {
+            if (row._meta === 'cleared' && isValidIsoTimestamp(row.clearedAt)) {
+              const ep = parseEpoch(row.clearedAt)
+              if (ep > maxEpoch) maxEpoch = ep
+            } else if (isValidIsoTimestamp(row.ts)) {
               const ep = parseEpoch(row.ts)
               if (ep > maxEpoch) maxEpoch = ep
             }
           }
-          if (maxEpoch > parseEpoch(clearedAt)) {
-            clearedAt = new Date(maxEpoch).toISOString()
+          for (const row of parseJsonlSafe(auditRaw)) {
+            if (isValidIsoTimestamp(row.ts)) {
+              const ep = parseEpoch(row.ts)
+              if (ep > maxEpoch) maxEpoch = ep
+            }
           }
+          clearedAt = new Date(maxEpoch).toISOString()
         }
         writesSinceCompactCheck = 0
         await atomicWriteFile0600(activityPath, `${JSON.stringify({ _meta: 'cleared', clearedAt })}\n`)
@@ -312,37 +329,39 @@ export async function readActivityHistory({
   category = 'all',
   outcome = 'all',
   q = '',
+  maxEntries = MAX_ACTIVITY_ENTRIES,
 } = {}) {
+  const effectiveMax = Math.max(1, Math.trunc(Number(maxEntries) || MAX_ACTIVITY_ENTRIES))
   const [activityRaw, auditRaw] = await Promise.all([
     readTextIfExists(activityPath),
     readTextIfExists(auditPath),
   ])
 
   let clearedAt = null
-  const activityRecords = []
+  const visibleActivity = []
   for (const row of parseJsonlSafe(activityRaw)) {
-    if (row._meta === 'cleared' && typeof row.clearedAt === 'string') {
+    if (row._meta === 'cleared' && isValidIsoTimestamp(row.clearedAt)) {
       if (!clearedAt || parseEpoch(row.clearedAt) > parseEpoch(clearedAt)) {
         clearedAt = row.clearedAt
       }
-    } else if (typeof row.action === 'string') {
-      activityRecords.push(formatActivityRecord({ ...row, source: 'activity' }))
+      // Anything physically preceding a clear marker is cleared; anything appended after remains visible even under clock skew.
+      visibleActivity.length = 0
+    } else if (typeof row.action === 'string' && isValidIsoTimestamp(row.ts)) {
+      visibleActivity.push(formatActivityRecord({ ...row, source: 'activity' }))
     }
   }
 
   const clearedEpoch = clearedAt ? parseEpoch(clearedAt) : null
-  const visibleActivity = clearedEpoch === null
-    ? activityRecords
-    : activityRecords.filter((r) => parseEpoch(r.ts) > clearedEpoch)
-
   const seenKeys = new Set(visibleActivity.map(dedupeKey))
   const merged = [...visibleActivity]
 
+  let auditRowIdx = 0
   for (const row of parseJsonlSafe(auditRaw)) {
-    if (typeof row.action !== 'string') continue
+    auditRowIdx += 1
+    if (typeof row.action !== 'string' || !isValidIsoTimestamp(row.ts)) continue
     const rec = formatActivityRecord({
       ...row,
-      id: `audit-${row.ts ?? ''}-${row.action}-${row.emailId ?? ''}`,
+      id: `audit-${row.ts}-${row.action}-${row.folder ?? ''}-${row.emailId ?? ''}-${auditRowIdx}`,
       source: 'audit',
       summary: {},
     })
@@ -355,13 +374,13 @@ export async function readActivityHistory({
     merged.push(rec)
   }
 
-  // Sort newest-first; tie-break preserving later-appended entries first.
+  // Sort newest-first; tie-break preserving later-appended entries first, then cap to rolling maxEntries.
   const indexed = merged.map((item, idx) => ({ item, idx, epoch: parseEpoch(item.ts) }))
   indexed.sort((a, b) => {
     if (b.epoch !== a.epoch) return b.epoch - a.epoch
     return b.idx - a.idx
   })
-  const allItems = indexed.map((x) => x.item)
+  const allItems = indexed.slice(0, effectiveMax).map((x) => x.item)
 
   const stats = {
     total: allItems.length,
@@ -374,7 +393,7 @@ export async function readActivityHistory({
     error: 0,
   }
   for (const item of allItems) {
-    if (item.category in stats) stats[item.category] += 1
+    if (Object.hasOwn(stats, item.category)) stats[item.category] += 1
     if (item.outcome === 'denied') stats.denied += 1
     else if (item.outcome === 'error') stats.error += 1
   }

@@ -166,22 +166,31 @@ window.__ModuleLoader__.load({
         histUnreadOnly: 'Unread only',
         histImportantOnly: 'Important only',
         histFoldersSummary: '{total} folder(s), {readable} readable',
+        histFoldersCount: '{count} folder(s)',
         histThreadCount: '{count} message(s) in thread',
         histJiraSummary: 'Parsed Jira notifications ({days}d): {count} update(s)',
+        histJiraNonOk: 'Jira notification scan ({days}d)',
         histIssues: 'Issues: {val}',
         histTodosSummary: 'Extracted todos ({days}d): {count} item(s)',
+        histTodosNonOk: 'Todo extraction ({days}d)',
         histUrgentCount: '{count} high/urgent',
         histProjectSummary: 'Project "{project}" ({days}d)',
         histProjectCounts: '{related} email(s) · {blocking} blocker(s) · {actions} action(s)',
         histAttachmentHeadline: 'Downloaded attachment: {name}',
         histMoveHeadline: 'Moved email to {folder}',
+        histMoveDenied: 'Blocked moving email to {folder}',
+        histMoveFailed: 'Failed to move email to {folder}',
         histMarkRead: 'Read',
         histMarkUnread: 'Unread',
         histMarkFlagged: 'Flagged',
         histMarkUnflagged: 'Unflagged',
         histPermDeleteBlocked: 'Blocked permanent delete attempt (PERM_001)',
         histDeleteRecoverable: 'Moved email to Deleted Items (recoverable)',
+        histDeleteEmailDenied: 'Blocked delete email attempt',
+        histDeleteEmailFailed: 'Failed to delete email',
         histDeleteDraft: 'Moved draft to Deleted Items',
+        histDeleteDraftDenied: 'Blocked delete draft attempt',
+        histDeleteDraftFailed: 'Failed to delete draft',
         histUpdatedFields: 'Updated: {val}',
         histBlockedFolder: 'Blocked access to restricted folder',
         histSearchQuery: 'Query: "{q}"',
@@ -351,22 +360,31 @@ window.__ModuleLoader__.load({
         histUnreadOnly: '仅未读',
         histImportantOnly: '仅重要',
         histFoldersSummary: '共 {total} 个目录，可读 {readable} 个',
+        histFoldersCount: '共 {count} 个目录',
         histThreadCount: '共 {count} 封往来邮件',
         histJiraSummary: '解析近 {days} 天 Jira 通知 · 命中 {count} 条',
+        histJiraNonOk: '解析近 {days} 天 Jira 通知',
         histIssues: '工单：{val}',
         histTodosSummary: '提取近 {days} 天待办 · 共 {count} 项',
+        histTodosNonOk: '提取近 {days} 天待办事项',
         histUrgentCount: '高优/紧急 {count} 项',
         histProjectSummary: '汇总项目「{project}」（近 {days} 天）',
         histProjectCounts: '关联 {related} 封邮件 · 阻塞 {blocking} 项 · 下一步 {actions} 项',
         histAttachmentHeadline: '下载附件：{name}',
         histMoveHeadline: '移动邮件至「{folder}」',
+        histMoveDenied: '尝试移动邮件至「{folder}」（已拦截）',
+        histMoveFailed: '移动邮件至「{folder}」失败',
         histMarkRead: '标为已读',
         histMarkUnread: '标为未读',
         histMarkFlagged: '加星标',
         histMarkUnflagged: '取消星标',
         histPermDeleteBlocked: '尝试永久删除邮件（已安全拦截 PERM_001）',
         histDeleteRecoverable: '移至「已删除项目」（可恢复）',
+        histDeleteEmailDenied: '尝试删除邮件（已拦截）',
+        histDeleteEmailFailed: '删除邮件失败',
         histDeleteDraft: '删除草稿（移至已删除项目）',
+        histDeleteDraftDenied: '尝试删除草稿（已拦截）',
+        histDeleteDraftFailed: '删除草稿失败',
         histUpdatedFields: '更新字段：{val}',
         histBlockedFolder: '尝试访问受限目录（已拦截）',
         histSearchQuery: '关键词：「{q}」',
@@ -800,11 +818,11 @@ window.__ModuleLoader__.load({
         background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.08));
       }
       .dsh-ex-tab-active {
-        background: var(--dsw-alias-bg-base, var(--dsw-alias-card-fill, #ffffff));
+        background: var(--dsw-alias-button-floating-fill, var(--dsw-alias-bg-base, #ffffff));
         color: var(--dsw-alias-label-primary, #111827);
         border-color: var(--dsw-alias-border-l2, rgba(128,128,128,0.22));
         font-weight: 600;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
       }
       .dsh-ex-tab-count {
         font-size: 11px;
@@ -1344,7 +1362,7 @@ window.__ModuleLoader__.load({
         if (s.from) details.push(t('histFrom', { val: s.from }));
         if (folder) details.push(t('histFolder', { val: folder }));
         if (s.attachmentCount > 0) details.push(t('histAttachments', { count: String(s.attachmentCount) }));
-        if (s.markAsRead) details.push(t('histMarkedRead'));
+        if (outcome === 'ok' && s.markAsRead) details.push(t('histMarkedRead'));
       } else if (action === 'save_draft') {
         headline = s.subject ? t('histDraftHeadline', { subject: s.subject }) : actionLabel;
         if (Array.isArray(s.to) && s.to.length > 0) {
@@ -1366,7 +1384,11 @@ window.__ModuleLoader__.load({
           details.push(t('histTo', { val: s.to.join(', ') }));
         }
       } else if (action === 'delete_draft') {
-        headline = t('histDeleteDraft');
+        headline = outcome === 'denied'
+          ? t('histDeleteDraftDenied')
+          : outcome === 'error'
+            ? t('histDeleteDraftFailed')
+            : t('histDeleteDraft');
       } else if (action === 'search_emails') {
         headline = s.query
           ? t('histSearchQuery', { q: s.query })
@@ -1375,7 +1397,7 @@ window.__ModuleLoader__.load({
             : t('histSearchFallback');
         if (folder) details.push(t('histFolder', { val: folder }));
         const hitCount = typeof s.total === 'number' ? s.total : item.count;
-        if (typeof hitCount === 'number') details.push(t('histHits', { count: String(hitCount) }));
+        if (outcome === 'ok' && typeof hitCount === 'number') details.push(t('histHits', { count: String(hitCount) }));
         if (s.from) details.push(t('histFrom', { val: s.from }));
         if (typeof s.days === 'number') details.push(t('histDays', { days: String(s.days) }));
         if (s.unreadOnly) details.push(t('histUnreadOnly'));
@@ -1383,7 +1405,7 @@ window.__ModuleLoader__.load({
       } else if (action === 'list_recent_emails') {
         headline = t('histRecentHeadline', { days: String(s.days || 7) });
         const retCount = typeof s.returnedCount === 'number' ? s.returnedCount : item.count;
-        if (typeof retCount === 'number') details.push(t('histReturned', { count: String(retCount) }));
+        if (outcome === 'ok' && typeof retCount === 'number') details.push(t('histReturned', { count: String(retCount) }));
         if (s.unreadOnly) details.push(t('histUnreadOnly'));
         if (Array.isArray(s.sampleSubjects) && s.sampleSubjects.length > 0) {
           details.push(s.sampleSubjects.join(' · '));
@@ -1392,23 +1414,35 @@ window.__ModuleLoader__.load({
         headline = t('histFoldersFallback');
         if (typeof s.folderCount === 'number' && typeof s.readableCount === 'number') {
           details.push(t('histFoldersSummary', { total: String(s.folderCount), readable: String(s.readableCount) }));
-        } else if (typeof item.count === 'number') {
-          details.push(t('histReturned', { count: String(item.count) }));
+        } else if (outcome === 'ok' && typeof item.count === 'number') {
+          details.push(t('histFoldersCount', { count: String(item.count) }));
         }
       } else if (action === 'get_thread') {
-        headline = s.subject ? s.subject : t('histThreadFallback');
+        if (outcome === 'denied') {
+          headline = t('histBlockedFolder');
+        } else {
+          headline = s.subject ? s.subject : t('histThreadFallback');
+        }
         const msgCount = typeof s.messageCount === 'number' ? s.messageCount : item.count;
-        if (typeof msgCount === 'number') details.push(t('histThreadCount', { count: String(msgCount) }));
+        if (outcome === 'ok' && typeof msgCount === 'number') details.push(t('histThreadCount', { count: String(msgCount) }));
         if (folder) details.push(t('histFolder', { val: folder }));
       } else if (action === 'parse_jira_notifications') {
-        const cnt = typeof s.matchedCount === 'number' ? s.matchedCount : (item.count ?? 0);
-        headline = t('histJiraSummary', { days: String(s.days || 7), count: String(cnt) });
+        if (outcome !== 'ok') {
+          headline = t('histJiraNonOk', { days: String(s.days || 7) });
+        } else {
+          const cnt = typeof s.matchedCount === 'number' ? s.matchedCount : (item.count ?? 0);
+          headline = t('histJiraSummary', { days: String(s.days || 7), count: String(cnt) });
+        }
         if (Array.isArray(s.issueKeys) && s.issueKeys.length > 0) {
           details.push(t('histIssues', { val: s.issueKeys.join(', ') }));
         }
       } else if (action === 'extract_todos') {
-        const cnt = typeof s.todoCount === 'number' ? s.todoCount : (item.count ?? 0);
-        headline = t('histTodosSummary', { days: String(s.days || 7), count: String(cnt) });
+        if (outcome !== 'ok') {
+          headline = t('histTodosNonOk', { days: String(s.days || 7) });
+        } else {
+          const cnt = typeof s.todoCount === 'number' ? s.todoCount : (item.count ?? 0);
+          headline = t('histTodosSummary', { days: String(s.days || 7), count: String(cnt) });
+        }
         if (s.urgentCount > 0) details.push(t('histUrgentCount', { count: String(s.urgentCount) }));
         if (Array.isArray(s.sampleTitles) && s.sampleTitles.length > 0) {
           details.push(s.sampleTitles.join(' · '));
@@ -1417,13 +1451,13 @@ window.__ModuleLoader__.load({
         headline = s.project
           ? t('histProjectSummary', { project: s.project, days: String(s.days || 30) })
           : actionLabel;
-        if (typeof s.relatedCount === 'number') {
+        if (outcome === 'ok' && typeof s.relatedCount === 'number') {
           details.push(t('histProjectCounts', {
             related: String(s.relatedCount),
             blocking: String(s.blockingCount || 0),
             actions: String(s.nextActionCount || 0),
           }));
-        } else if (typeof item.count === 'number') {
+        } else if (outcome === 'ok' && typeof item.count === 'number') {
           details.push(t('histHits', { count: String(item.count) }));
         }
       } else if (action === 'download_attachment') {
@@ -1431,7 +1465,15 @@ window.__ModuleLoader__.load({
         if (typeof s.size === 'number') details.push(formatBytes(s.size));
       } else if (action === 'move_email') {
         const dest = s.targetFolder || folder;
-        headline = dest ? t('histMoveHeadline', { folder: dest }) : actionLabel;
+        if (dest) {
+          headline = outcome === 'denied'
+            ? t('histMoveDenied', { folder: dest })
+            : outcome === 'error'
+              ? t('histMoveFailed', { folder: dest })
+              : t('histMoveHeadline', { folder: dest });
+        } else {
+          headline = actionLabel;
+        }
       } else if (action === 'mark_email') {
         const marks = [];
         if (s.isRead === true) marks.push(t('histMarkRead'));
@@ -1440,7 +1482,15 @@ window.__ModuleLoader__.load({
         if (s.isFlagged === false) marks.push(t('histMarkUnflagged'));
         headline = marks.length > 0 ? `${actionLabel}: ${marks.join(' · ')}` : t('histMarkFallback');
       } else if (action === 'delete_email') {
-        headline = s.permanentAttempt ? t('histPermDeleteBlocked') : t('histDeleteRecoverable');
+        if (s.permanentAttempt) {
+          headline = t('histPermDeleteBlocked');
+        } else if (outcome === 'denied') {
+          headline = t('histDeleteEmailDenied');
+        } else if (outcome === 'error') {
+          headline = t('histDeleteEmailFailed');
+        } else {
+          headline = t('histDeleteRecoverable');
+        }
         if (folder) details.push(t('histFolder', { val: folder }));
       } else {
         if (folder) details.push(t('histFolder', { val: folder }));
@@ -1517,6 +1567,17 @@ window.__ModuleLoader__.load({
       const [clearingHistory, setClearingHistory] = useState(false);
       const historyReqSeqRef = useRef(0);
       const historyDebounceRef = useRef(null);
+      const historyCategoryRef = useRef(historyCategory);
+      historyCategoryRef.current = historyCategory;
+      const historyQueryRef = useRef(historyQuery);
+      historyQueryRef.current = historyQuery;
+
+      const cancelHistoryDebounce = useCallback(() => {
+        if (historyDebounceRef.current) {
+          clearTimeout(historyDebounceRef.current);
+          historyDebounceRef.current = null;
+        }
+      }, []);
 
       const selectedFolders = modeFolders[mode] || [];
       const setSelectedFoldersForMode = useCallback((targetMode, updater) => {
@@ -1627,7 +1688,12 @@ window.__ModuleLoader__.load({
             return;
           }
           const incoming = Array.isArray(data.items) ? data.items : [];
-          setHistoryItems((prev) => (append ? prev.concat(incoming) : incoming));
+          setHistoryItems((prev) => {
+            if (!append) return incoming;
+            const seen = new Set(prev.map((x) => x.id).filter(Boolean));
+            const uniqueNew = incoming.filter((x) => !x.id || !seen.has(x.id));
+            return prev.concat(uniqueNew);
+          });
           setHistoryTotal(Number.isFinite(Number(data.total)) ? Number(data.total) : incoming.length);
           setHistoryHasMore(Boolean(data.hasMore));
           if (data.stats && typeof data.stats === 'object') {
@@ -1637,7 +1703,7 @@ window.__ModuleLoader__.load({
           if (!mountedRef.current || reqSeq !== historyReqSeqRef.current) return;
           if (!silent) setHistoryError(err?.message || String(err));
         } finally {
-          if (mountedRef.current && reqSeq === historyReqSeqRef.current && !silent) {
+          if (mountedRef.current && reqSeq === historyReqSeqRef.current) {
             setHistoryLoading(false);
           }
         }
@@ -1650,40 +1716,63 @@ window.__ModuleLoader__.load({
 
       useEffect(() => {
         return () => {
-          if (historyDebounceRef.current) {
-            clearTimeout(historyDebounceRef.current);
-            historyDebounceRef.current = null;
-          }
+          cancelHistoryDebounce();
         };
-      }, []);
+      }, [cancelHistoryDebounce]);
 
       const handleSelectTab = async (nextTab) => {
+        cancelHistoryDebounce();
         setActiveTab(nextTab);
         setHistoryFeedback(null);
         setConfirmingClearHistory(false);
         if (nextTab === 'history') {
-          await loadHistory({ category: historyCategory, q: historyQuery, offset: 0, append: false, silent: false });
+          await loadHistory({
+            category: historyCategoryRef.current,
+            q: historyQueryRef.current,
+            offset: 0,
+            append: false,
+            silent: false,
+          });
         }
       };
 
       const handleSelectHistoryCategory = async (nextCat) => {
+        cancelHistoryDebounce();
+        historyCategoryRef.current = nextCat;
         setHistoryCategory(nextCat);
         setHistoryFeedback(null);
-        await loadHistory({ category: nextCat, q: historyQuery, offset: 0, append: false, silent: false });
+        await loadHistory({
+          category: nextCat,
+          q: historyQueryRef.current,
+          offset: 0,
+          append: false,
+          silent: false,
+        });
       };
 
       const handleHistoryQueryChange = (nextQ) => {
+        historyQueryRef.current = nextQ;
         setHistoryQuery(nextQ);
-        if (historyDebounceRef.current) clearTimeout(historyDebounceRef.current);
+        cancelHistoryDebounce();
         historyDebounceRef.current = setTimeout(() => {
           historyDebounceRef.current = null;
-          void loadHistory({ category: historyCategory, q: nextQ, offset: 0, append: false, silent: false });
+          void loadHistory({
+            category: historyCategoryRef.current,
+            q: historyQueryRef.current,
+            offset: 0,
+            append: false,
+            silent: false,
+          });
         }, 220);
       };
 
       const handleClearHistoryConfirmed = async () => {
         if (clearingHistory) return;
+        cancelHistoryDebounce();
+        // Invalidate any in-flight GET /api/history so older items can never resurrect after clear.
+        historyReqSeqRef.current += 1;
         setClearingHistory(true);
+        setHistoryLoading(false);
         setHistoryFeedback(null);
         try {
           const resp = await fetch('dsh-exchange/api/history/clear', {
@@ -1821,17 +1910,17 @@ window.__ModuleLoader__.load({
           });
           const data = await readJsonSafely(resp);
           if (!resp.ok || !data.ok) {
-            setFeedback({ scope: 'top', tone: 'err', text: formatApiError(data, resp.status, t) });
+            setFeedback({ scope: 'lock', tone: 'err', text: formatApiError(data, resp.status, t) });
             return;
           }
           setEmergencyLock(nextLock);
           setFeedback({
-            scope: 'top',
+            scope: 'lock',
             tone: nextLock ? 'warn' : 'ok',
             text: nextLock ? t('emergencyLockedOk') : t('emergencyUnlockedOk'),
           });
         } catch (err) {
-          setFeedback({ scope: 'top', tone: 'err', text: err?.message || String(err) });
+          setFeedback({ scope: 'lock', tone: 'err', text: err?.message || String(err) });
         } finally {
           setTogglingLock(false);
         }
@@ -2072,6 +2161,16 @@ window.__ModuleLoader__.load({
                 : t('emergencyLockBtn'),
           ),
         ),
+        feedback && feedback.scope === 'lock'
+          ? h(
+              'div',
+              {
+                role: feedback.tone === 'err' ? 'alert' : 'status',
+                className: `dsh-ex-banner ${feedback.tone === 'ok' ? 'dsh-ex-banner-ok' : feedback.tone === 'warn' ? 'dsh-ex-banner-warn' : 'dsh-ex-banner-err'}`,
+              },
+              feedback.text,
+            )
+          : null,
         // Segmented Tabs: Configuration | Agent Activity History
         h(
           'div',
@@ -2137,8 +2236,16 @@ window.__ModuleLoader__.load({
                         className: 'dsh-ex-btn',
                         'data-testid': 'dsh-ex-history-refresh-btn',
                         disabled: historyLoading,
-                        onClick: () =>
-                          loadHistory({ category: historyCategory, q: historyQuery, offset: 0, append: false, silent: false }),
+                        onClick: () => {
+                          cancelHistoryDebounce();
+                          return loadHistory({
+                            category: historyCategoryRef.current,
+                            q: historyQueryRef.current,
+                            offset: 0,
+                            append: false,
+                            silent: false,
+                          });
+                        },
                       },
                       historyLoading ? t('historyRefreshingBtn') : t('historyRefreshBtn'),
                     ),
@@ -2227,11 +2334,14 @@ window.__ModuleLoader__.load({
                   onChange: (e) => handleHistoryQueryChange(e.target.value),
                   onKeyDown: (e) => {
                     if (e.key === 'Enter') {
-                      if (historyDebounceRef.current) {
-                        clearTimeout(historyDebounceRef.current);
-                        historyDebounceRef.current = null;
-                      }
-                      void loadHistory({ category: historyCategory, q: historyQuery, offset: 0, append: false, silent: false });
+                      cancelHistoryDebounce();
+                      void loadHistory({
+                        category: historyCategoryRef.current,
+                        q: historyQueryRef.current,
+                        offset: 0,
+                        append: false,
+                        silent: false,
+                      });
                     }
                   },
                 }),
@@ -2282,17 +2392,19 @@ window.__ModuleLoader__.load({
                   : null,
                 historyLoading && historyItems.length === 0
                   ? h('div', { className: 'dsh-ex-empty-box', role: 'status' }, t('historyLoading'))
-                  : !historyError && historyItems.length === 0
-                    ? h(
-                        'div',
-                        { className: 'dsh-ex-empty-box' },
-                        historyCategory !== 'all' || historyQuery.trim()
-                          ? t('historyFilterEmpty')
-                          : t('historyEmpty'),
-                      )
-                    : h(
-                        'div',
-                        { className: 'dsh-ex-activity-list', role: 'list' },
+                  : historyError && historyItems.length === 0
+                    ? null
+                    : historyItems.length === 0
+                      ? h(
+                          'div',
+                          { className: 'dsh-ex-empty-box' },
+                          historyStats.total > 0 && (historyCategory !== 'all' || historyQuery.trim())
+                            ? t('historyFilterEmpty')
+                            : t('historyEmpty'),
+                        )
+                      : h(
+                          'div',
+                          { className: 'dsh-ex-activity-list', role: 'list' },
                         ...historyItems.map((item) => {
                           const fmt = formatActivityEntry(item, t);
                           const isDenied = item.outcome === 'denied';
@@ -2358,14 +2470,16 @@ window.__ModuleLoader__.load({
                           type: 'button',
                           className: 'dsh-ex-btn',
                           disabled: historyLoading,
-                          onClick: () =>
-                            loadHistory({
-                              category: historyCategory,
-                              q: historyQuery,
+                          onClick: () => {
+                            cancelHistoryDebounce();
+                            return loadHistory({
+                              category: historyCategoryRef.current,
+                              q: historyQueryRef.current,
                               offset: historyItems.length,
                               append: true,
                               silent: false,
-                            }),
+                            });
+                          },
                         },
                         t('historyLoadMoreBtn', { remaining: String(Math.max(0, historyTotal - historyItems.length)) }),
                       ),

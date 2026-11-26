@@ -263,11 +263,69 @@ test('createExchangeTools defines all 15 tools with valid DSH defineTool schemas
     })
     const hrRead = hrTools.find((t) => t.name === 'exchange_read_email')
     await assert.rejects(
-      () => hrRead.execute({ email_id: 'email-hr' }, exec),
+      () => hrRead.execute({ email_id: 'email-hr', mark_as_read: true }, exec),
       (err) => err instanceof ExchangeError && err.code === ERROR_CODES.PERM_001,
     )
     const activityAfterHr = await readFile(activityPath, 'utf8')
     assert.doesNotMatch(activityAfterHr, /CONFIDENTIAL SALARY LETTER|hr-secret@company\.com|TOP SECRET COMP/)
+    const hrLines = activityAfterHr.trim().split('\n').map((l) => JSON.parse(l))
+    const deniedReadRec = hrLines[hrLines.length - 1]
+    assert.equal(deniedReadRec.action, 'read_email')
+    assert.equal(deniedReadRec.outcome, 'denied')
+    assert.equal(deniedReadRec.summary.markAsRead, undefined, 'denied read_email must not claim markAsRead')
+
+    // C1 regression: exchange_extract_todos on an email with EMPTY subject must NEVER leak body_text into activity.jsonl
+    const blankSubjEmail = {
+      id: 'email-blank-subj',
+      parentFolderId: 'f-inbox',
+      conversationId: 'conv-blank',
+      messageId: '<blank@corp>',
+      references: [],
+      from: 'pm@company.com',
+      to: ['me@company.com'],
+      cc: [],
+      subject: '',
+      bodyText: 'ULTRA_PRIVATE_BODY_SENTENCE please reply by 2026-11-28.',
+      bodyHtml: null,
+      receivedTime: '2026-11-24T12:00:00.000Z',
+      sentTime: '2026-11-24T12:00:00.000Z',
+      isRead: false,
+      isDraft: false,
+      isFlagged: false,
+      importance: 'high',
+      hasAttachments: false,
+      attachments: [],
+    }
+    const blankClient = {
+      ...fakeClient,
+      async findItems() { return { items: [blankSubjEmail], total: 1 } },
+      async getItem(id) {
+        if (id === 'email-blank-subj') return blankSubjEmail
+        return fakeClient.getItem(id)
+      },
+    }
+    const blankTools = createExchangeTools({
+      ctx: {},
+      config: {
+        maxSearchResults: 100,
+        maxAttachmentMb: 25,
+        maxAttachmentBytes: 25 * 1024 * 1024,
+        maxBodyChars: 20000,
+        requestTimeoutSeconds: 30,
+        requestTimeoutMs: 30000,
+        explicitPrefix: '@mail',
+        dataDir: dir,
+      },
+      statePath,
+      auditPath,
+      activityPath,
+      clientFactory: () => blankClient,
+      getPasswordFn: async () => 'secret-pass',
+    })
+    const blankTodos = await blankTools.find((t) => t.name === 'exchange_extract_todos').execute({ days: 7 }, exec)
+    assert.ok(blankTodos.todos.length >= 1)
+    const activityAfterBlank = await readFile(activityPath, 'utf8')
+    assert.doesNotMatch(activityAfterBlank, /ULTRA_PRIVATE_BODY_SENTENCE/, 'extract_todos must never leak body_text into activity.jsonl when subject is empty')
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

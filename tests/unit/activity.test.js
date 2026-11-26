@@ -283,3 +283,56 @@ test('readActivityHistory returns clean empty result when neither file exists (E
     await rm(dir, { recursive: true, force: true })
   }
 })
+
+test('readActivityHistory prevents audit resurrection past rolling cap, preserves post-clear records under backward clock skew, and ignores corrupt ts/prototype actions', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-ex-review-fixes-'))
+  try {
+    const activityPath = join(dir, 'activity.jsonl')
+    const auditPath = join(dir, 'audit.jsonl')
+    const audit = createAuditLogger(auditPath)
+    const activity = createActivityLogger(activityPath, { auditPath, maxEntries: 10, compactThreshold: 15 })
+
+    // I1 + M4: Write 18 shared entries to both audit.jsonl and activity.jsonl -> activity compacts to <= 10; audit must NOT resurrect older rows beyond maxEntries
+    for (let i = 0; i < 18; i++) {
+      const ts = new Date(Date.UTC(2026, 10, 25, 10, 0, i)).toISOString()
+      await audit.log({ ts, action: 'read_email', folder: '收件箱', emailId: `m-${i}`, outcome: 'ok', elapsedMs: 5 })
+      await activity.log({ ts, action: 'read_email', folder: '收件箱', emailId: `m-${i}`, outcome: 'ok', elapsedMs: 5, summary: { subject: `Sub ${i}` } })
+    }
+    const capped = await readActivityHistory({ activityPath, auditPath, limit: 50, maxEntries: 10 })
+    assert.equal(capped.total, 10)
+    assert.equal(capped.unfilteredTotal, 10)
+    assert.equal(capped.items.every((x) => x.source === 'activity'), true, 'compacted audit entries must not resurrect past maxEntries')
+
+    // I5: Corrupt JSONL rows without valid ts must be skipped (never get synthetic now ts), and prototype action names ("toString") must map safely to "search"
+    await appendFile(activityPath, '{"action":"read_email","outcome":"ok"}\n{"action":"toString","ts":"2026-11-25T10:05:00.000Z","outcome":"ok"}\n', 'utf8')
+    await appendFile(auditPath, '{"action":"search_emails","outcome":"ok"}\n', 'utf8')
+    const withCorrupt = await readActivityHistory({ activityPath, auditPath, limit: 50, maxEntries: 20 })
+    const protoItem = withCorrupt.items.find((x) => x.action === 'toString')
+    assert.ok(protoItem)
+    assert.equal(protoItem.category, 'search')
+    assert.equal(withCorrupt.items.some((x) => x.action === 'read_email' && !x.emailId), false, 'row missing valid ts must be skipped')
+
+    // I2: Backward clock skew & same-millisecond post-clear logging
+    // Audit has a future-skewed timestamp 2099-01-01T00:00:00.000Z; user clicks clear() -> clearedAt advances to 2099
+    await audit.log({ ts: '2099-01-01T00:00:00.000Z', action: 'list_folders', outcome: 'ok', count: 5, elapsedMs: 10 })
+    await activity.clear()
+    const rightAfterClear = await readActivityHistory({ activityPath, auditPath })
+    assert.equal(rightAfterClear.total, 0)
+
+    // Subsequent brand-new activity written AFTER clear() with an earlier (NTP-corrected) clock timestamp MUST STILL APPEAR!
+    await activity.log({
+      ts: '2026-11-26T02:00:00.000Z',
+      action: 'save_draft',
+      folder: '草稿箱',
+      emailId: 'draft-post-clear',
+      outcome: 'ok',
+      elapsedMs: 40,
+      summary: { subject: 'Post-clear NTP draft', to: ['a@corp.com'], toCount: 1, bodyChars: 50 },
+    })
+    const afterSkewLog = await readActivityHistory({ activityPath, auditPath })
+    assert.equal(afterSkewLog.total, 1, 'post-clear entry appended after marker must stay visible even under backward clock skew')
+    assert.equal(afterSkewLog.items[0].emailId, 'draft-post-clear')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})

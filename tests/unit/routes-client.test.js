@@ -1182,6 +1182,56 @@ test('client.js renders Configuration/Activity History tabs, formats all activit
   assert.match(fmtAuditLegacyZh.actionLabel, /搜索邮件/)
   assert.match(fmtAuditLegacyZh.details.join(' '), /6/)
 
+  // Legacy list_folders audit row must say folder count ("共 43 个目录"), NOT emails ("返回 43 封")
+  const fmtAuditFoldersZh = plugin.__formatActivityEntry({
+    action: 'list_folders',
+    outcome: 'ok',
+    count: 43,
+    source: 'audit',
+    summary: {},
+  }, zhT)
+  assert.match(fmtAuditFoldersZh.details.join(' '), /共 43 个目录/)
+  assert.doesNotMatch(fmtAuditFoldersZh.details.join(' '), /封/)
+
+  // I6: Blocked/failed tool calls must NOT display completed-action wording or fabricated 0 hit counts
+  const fmtBlockedReadZh = plugin.__formatActivityEntry({
+    action: 'read_email',
+    outcome: 'denied',
+    code: 'PERM_001',
+    folder: '人事资料',
+    source: 'activity',
+    summary: { markAsRead: true },
+  }, zhT)
+  assert.doesNotMatch(fmtBlockedReadZh.details.join(' '), /已读/)
+
+  const fmtBlockedDelEn = plugin.__formatActivityEntry({
+    action: 'delete_email',
+    outcome: 'denied',
+    code: 'PERM_001',
+    source: 'activity',
+    summary: { permanentAttempt: false },
+  }, enT)
+  assert.match(fmtBlockedDelEn.headline, /blocked/i)
+  assert.doesNotMatch(fmtBlockedDelEn.headline, /Moved email to Deleted Items/i)
+
+  const fmtBlockedThreadEn = plugin.__formatActivityEntry({
+    action: 'get_thread',
+    outcome: 'denied',
+    code: 'PERM_001',
+    source: 'activity',
+    summary: {},
+  }, enT)
+  assert.match(fmtBlockedThreadEn.headline, /blocked/i)
+
+  const fmtFailedJiraEn = plugin.__formatActivityEntry({
+    action: 'parse_jira_notifications',
+    outcome: 'error',
+    code: 'NET_001',
+    source: 'activity',
+    summary: { days: 7 },
+  }, enT)
+  assert.doesNotMatch(fmtFailedJiraEn.headline, /0 update/)
+
   // 2. Render ExchangeSettingsPanel and verify tablist + switch to History tab + 2-step clear
   const settingsEntry = slots.find((r) => r.opts.name === 'settings.section')
   const renderPanel = () => {
@@ -1232,7 +1282,7 @@ test('client.js renders Configuration/Activity History tabs, formats all activit
   await confirmClearBtn.props.onClick()
   assert.ok(fetchCalls.some((c) => c.url === 'dsh-exchange/api/history/clear' && c.method === 'POST'))
 
-  // 3. Graceful 404 handling when running against an older backend without /api/history
+  // 3. Graceful 404 handling when running against an older backend without /api/history + no empty role="list"
   historyResponse = { ok: false, status: 404, body: {} }
   const afterClearTree = renderPanel()
   const refreshBtn = collectNodes(afterClearTree, (n) => n.type === 'button' && n.props?.['data-testid'] === 'dsh-ex-history-refresh-btn')[0]
@@ -1240,4 +1290,15 @@ test('client.js renders Configuration/Activity History tabs, formats all activit
   await refreshBtn.props.onClick()
   const tree404 = renderPanel()
   assert.ok(collectNodes(tree404, (n) => n.props?.role === 'alert').length >= 1, '404 history endpoint must render graceful alert banner')
+  assert.equal(collectNodes(tree404, (n) => n.props?.role === 'list').length, 0, '404 history error must not render an empty role="list"')
+
+  // 4. I4: Emergency Lock toggle while viewing Activity History tab must display lock feedback banner above tabs
+  states[0] = false // loading=false so Lock button is enabled
+  const treeWithLockEnabled = renderPanel()
+  const lockBtn = collectNodes(treeWithLockEnabled, (n) => n.type === 'button' && n.props?.className?.includes('dsh-ex-btn-danger') && collectText(n).includes('立即紧急锁定'))[0]
+  assert.ok(lockBtn, 'Emergency Lock button must stay visible on Activity History tab')
+  await lockBtn.props.onClick()
+  const treeAfterLockErr = renderPanel()
+  const lockFeedbackAlerts = collectNodes(treeAfterLockErr, (n) => n.props?.role === 'alert' && collectText(n).includes('404'))
+  assert.ok(lockFeedbackAlerts.length >= 1, 'Emergency Lock feedback/error must render visibly even when on Activity History tab')
 })

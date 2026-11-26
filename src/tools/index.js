@@ -367,7 +367,6 @@ export function createExchangeTools({
         return runAudited({
           action: 'read_email',
           emailId: args.email_id,
-          summary: { markAsRead: Boolean(args.mark_as_read) },
           signal: exec.signal,
           async handler({ state, getClient, setAuditMeta, setActivitySummary }) {
             if (state.access.emergencyLock) {
@@ -390,6 +389,7 @@ export function createExchangeTools({
               receivedTime: detail.received_time,
               hasAttachments: detail.has_attachments,
               attachmentCount: Array.isArray(detail.attachments) ? detail.attachments.length : 0,
+              markAsRead: Boolean(args.mark_as_read),
             })
             return detail
           },
@@ -795,7 +795,8 @@ export function createExchangeTools({
             setActivitySummary({
               todoCount: res.todos.length,
               urgentCount: res.todos.filter((item) => item.priority === 'urgent' || item.priority === 'high').length,
-              sampleTitles: res.todos.slice(0, 3).map((item) => item.title),
+              // Never log item.title because extractTodos falls back to email body text when source_subject is blank.
+              sampleTitles: [...new Set(res.todos.map((item) => item.source_subject).filter(Boolean))].slice(0, 3),
             })
             return res
           },

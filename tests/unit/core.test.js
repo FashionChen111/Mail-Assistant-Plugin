@@ -11,6 +11,7 @@ import { Config, resolveConfig } from '../../src/config.js'
 import {
   STATE_VERSION,
   defaultState,
+  normalizeState,
   validateServerUrl,
   readState,
   writeState,
@@ -105,6 +106,9 @@ test('readState returns default on ENOENT; writeState writes atomically with 060
     assert.equal(initial.access.mode, 'blacklist')
     assert.deepEqual(initial.access.folders, [])
     assert.equal(initial.access.emergencyLock, false)
+    assert.deepEqual(initial.ui, { showSidebarEntry: true })
+    assert.deepEqual(normalizeState({}).ui, { showSidebarEntry: true })
+    assert.deepEqual(normalizeState({ ui: { showSidebarEntry: false } }).ui, { showSidebarEntry: false })
 
     await writeState(statePath, {
       version: '1.1.0',
@@ -120,6 +124,9 @@ test('readState returns default on ENOENT; writeState writes atomically with 060
         folders: ['收件箱', '认证项目/Widevine', '收件箱'],
         emergencyLock: false,
       },
+      ui: {
+        showSidebarEntry: false,
+      },
     })
 
     const rawText = await readFile(statePath, 'utf8')
@@ -131,6 +138,7 @@ test('readState returns default on ENOENT; writeState writes atomically with 060
     assert.equal(reread.account.serverUrl, 'https://exchange.company.com/EWS/Exchange.asmx')
     assert.deepEqual(reread.access.folders, ['收件箱', '认证项目/Widevine'])
     assert.equal('password' in reread.account, false)
+    assert.deepEqual(reread.ui, { showSidebarEntry: false })
 
     await assert.rejects(
       () => writeState(statePath, {

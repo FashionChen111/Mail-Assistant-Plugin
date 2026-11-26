@@ -158,6 +158,7 @@ export function registerExchangeRoutes(
           version: state.version,
           account: state.account,
           access: state.access,
+          ui: state.ui,
           passwordSet: passDesc.configured,
           passwordSource: passDesc.source,
           limits: {
@@ -260,6 +261,7 @@ export function registerExchangeRoutes(
             version: def.version,
             account: current.account,
             access: def.access,
+            ui: current.ui,
           }
         } else {
           const nextAccount = {
@@ -292,10 +294,17 @@ export function registerExchangeRoutes(
               : current.access.emergencyLock,
           }
 
+          const nextUi = {
+            showSidebarEntry: typeof body.ui?.showSidebarEntry === 'boolean'
+              ? body.ui.showSidebarEntry
+              : current.ui.showSidebarEntry,
+          }
+
           nextState = {
             version: current.version,
             account: nextAccount,
             access: nextAccess,
+            ui: nextUi,
           }
         }
 

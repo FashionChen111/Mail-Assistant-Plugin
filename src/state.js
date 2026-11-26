@@ -23,6 +23,9 @@ export function defaultState() {
       folders: [],
       emergencyLock: false,
     },
+    ui: {
+      showSidebarEntry: true,
+    },
   }
 }
 
@@ -95,6 +98,9 @@ export function normalizeState(raw = {}, { requireValidHttps = false } = {}) {
       mode,
       folders: normalizeFolderList(accessRaw.folders),
       emergencyLock: Boolean(accessRaw.emergencyLock),
+    },
+    ui: {
+      showSidebarEntry: raw?.ui?.showSidebarEntry !== false,
     },
   }
 }

@@ -202,7 +202,24 @@ test('HTTP routes enforce trust fence, method/content-type/size guards, HTTPS, c
       assert.equal(out.json.passwordSet, true)
       assert.equal(out.json.passwordSource, 'credentials')
       assert.equal(out.json.access.mode, 'whitelist')
+      assert.deepEqual(out.json.ui, { showSidebarEntry: true })
       assert.doesNotMatch(out.text, /super-secret-password/)
+    }
+
+    // Partial POST /save with { ui: { showSidebarEntry: false } } preserves account & access
+    {
+      const { req, res } = createMockReqRes({
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ui: { showSidebarEntry: false } }),
+      })
+      await routes.get(ROUTE_PATHS.save).handler(req, res)
+      const out = res._read()
+      assert.equal(out.statusCode, 200)
+      assert.deepEqual(out.json.state.ui, { showSidebarEntry: false })
+      assert.equal(out.json.state.account.email, 'alice@corp.com')
+      assert.equal(out.json.state.access.mode, 'whitelist')
+      assert.deepEqual(out.json.state.access.folders, ['收件箱', '认证项目', '认证项目/Widevine'])
     }
 
     // POST /probe without re-sending password falls back to stored credential and returns folder list
@@ -255,6 +272,7 @@ test('HTTP routes enforce trust fence, method/content-type/size guards, HTTPS, c
       assert.equal(reread.access.mode, 'blacklist')
       assert.deepEqual(reread.access.folders, [])
       assert.equal(reread.access.emergencyLock, false)
+      assert.deepEqual(reread.ui, { showSidebarEntry: false })
     }
   } finally {
     await rm(dir, { recursive: true, force: true })

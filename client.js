@@ -103,6 +103,97 @@ window.__ModuleLoader__.load({
         sidebarShortcutShownOk: 'Top-left sidebar shortcut is now visible.',
         sidebarShortcutHiddenOk: 'Top-left sidebar shortcut hidden. You can re-enable it anytime in Settings or Plugins.',
         backToChatBtn: '← Back to Chat',
+        tabSettings: 'Configuration',
+        tabHistory: 'Activity History',
+        historyTitle: 'Agent Activity History',
+        historySubtitle: 'Local log of emails read, drafts saved, searches, analyses, and blocked attempts. Never stores passwords or email bodies.',
+        historyRefreshBtn: 'Refresh',
+        historyRefreshingBtn: 'Refreshing...',
+        historyClearBtn: 'Clear History',
+        historyClearingBtn: 'Clearing...',
+        historyClearConfirmText: 'Clear visible Agent activity history? The underlying redacted security audit log (audit.jsonl) stays intact.',
+        historyClearConfirmBtn: 'Confirm Clear',
+        historyClearedOk: 'Agent activity history cleared.',
+        historySearchPlaceholder: 'Search subject, sender, folder, project, or keyword...',
+        historyStatTotal: 'Total Actions',
+        historyStatRead: 'Emails Read',
+        historyStatDraft: 'Drafts',
+        historyStatBlocked: 'Blocked / Failed',
+        historyFilterAll: 'All',
+        historyFilterRead: 'Read',
+        historyFilterDraft: 'Drafts',
+        historyFilterSearch: 'Search',
+        historyFilterAnalyze: 'Analysis',
+        historyFilterModify: 'Organize',
+        historyFilterBlocked: 'Blocked',
+        historyLoading: 'Loading Agent activity history...',
+        historyEmpty: 'No Agent activity recorded yet. Invoke @mail in a conversation to see read emails, saved drafts, and analyses here.',
+        historyFilterEmpty: 'No activity records match the current filter.',
+        historyLoadMoreBtn: 'Load More ({remaining} remaining)',
+        historyUnavailable: 'Activity history API is not available on the currently running DSH backend (HTTP 404). Restart DSH to enable it.',
+        historyPrivacyNote: 'Stored locally in $DSH_HOME/dsh-exchange/activity.jsonl (mode 0600, up to 500 entries). Email bodies, attachment contents, and passwords are never saved.',
+        historyOutcomeOk: 'Success',
+        historyOutcomeDenied: 'Blocked',
+        historyOutcomeError: 'Failed',
+        historySourceAudit: 'Audit log',
+        act_list_folders: 'List Folders',
+        act_search_emails: 'Search Emails',
+        act_read_email: 'Read Email',
+        act_list_recent_emails: 'Recent Emails',
+        act_save_draft: 'Save Draft',
+        act_update_draft: 'Update Draft',
+        act_delete_draft: 'Delete Draft',
+        act_get_thread: 'Read Thread',
+        act_parse_jira_notifications: 'Parse Jira',
+        act_extract_todos: 'Extract Todos',
+        act_summarize_project: 'Project Summary',
+        act_download_attachment: 'Download Attachment',
+        act_move_email: 'Move Email',
+        act_mark_email: 'Mark Email',
+        act_delete_email: 'Delete Email',
+        histFrom: 'From: {val}',
+        histTo: 'To: {val}',
+        histCcCount: '+{count} CC',
+        histFolder: 'Folder: {val}',
+        histDraftReply: 'Reply draft',
+        histDraftOnly: 'Draft-only (not sent)',
+        histChars: '{count} chars',
+        histMarkedRead: 'Marked as read',
+        histAttachments: '{count} attachment(s)',
+        histHits: '{count} matched',
+        histReturned: '{count} returned',
+        histDays: 'Last {days}d',
+        histUnreadOnly: 'Unread only',
+        histImportantOnly: 'Important only',
+        histFoldersSummary: '{total} folder(s), {readable} readable',
+        histThreadCount: '{count} message(s) in thread',
+        histJiraSummary: 'Parsed Jira notifications ({days}d): {count} update(s)',
+        histIssues: 'Issues: {val}',
+        histTodosSummary: 'Extracted todos ({days}d): {count} item(s)',
+        histUrgentCount: '{count} high/urgent',
+        histProjectSummary: 'Project "{project}" ({days}d)',
+        histProjectCounts: '{related} email(s) · {blocking} blocker(s) · {actions} action(s)',
+        histAttachmentHeadline: 'Downloaded attachment: {name}',
+        histMoveHeadline: 'Moved email to {folder}',
+        histMarkRead: 'Read',
+        histMarkUnread: 'Unread',
+        histMarkFlagged: 'Flagged',
+        histMarkUnflagged: 'Unflagged',
+        histPermDeleteBlocked: 'Blocked permanent delete attempt (PERM_001)',
+        histDeleteRecoverable: 'Moved email to Deleted Items (recoverable)',
+        histDeleteDraft: 'Moved draft to Deleted Items',
+        histUpdatedFields: 'Updated: {val}',
+        histBlockedFolder: 'Blocked access to restricted folder',
+        histSearchQuery: 'Query: "{q}"',
+        histReadFallback: 'Read email in {folder}',
+        histReadFallbackNoFolder: 'Read email',
+        histDraftHeadline: 'Draft: "{subject}"',
+        histUpdateDraftFallback: 'Updated existing draft',
+        histRecentHeadline: 'Browsed recent emails ({days}d)',
+        histSearchFallback: 'Searched emails',
+        histFoldersFallback: 'Listed mailbox folders',
+        histThreadFallback: 'Reconstructed conversation thread',
+        histMarkFallback: 'Updated email flags',
       },
       zh: {
         nav: 'Mail Assistant',
@@ -197,6 +288,97 @@ window.__ModuleLoader__.load({
         sidebarShortcutShownOk: '已在左上角全局面板显示 Mail Assistant 快捷入口。',
         sidebarShortcutHiddenOk: '已隐藏左上角快捷入口，可随时在「设置」或「插件」中重新开启。',
         backToChatBtn: '← 返回对话',
+        tabSettings: '配置与权限',
+        tabHistory: 'Agent 操作历史',
+        historyTitle: 'Agent 操作历史',
+        historySubtitle: '记录 Agent 最近阅读的邮件、生成的草稿、搜索分析及安全拦截明细。仅存本地，绝不记录密码或邮件正文。',
+        historyRefreshBtn: '刷新',
+        historyRefreshingBtn: '刷新中...',
+        historyClearBtn: '清空历史',
+        historyClearingBtn: '清空中...',
+        historyClearConfirmText: '确认清空页面显示的 Agent 操作历史？底层脱敏安全审计日志（audit.jsonl）不会被删除。',
+        historyClearConfirmBtn: '确认清空',
+        historyClearedOk: '已清空 Agent 操作历史。',
+        historySearchPlaceholder: '搜索主题、发件人、文件夹、项目或关键词...',
+        historyStatTotal: '总操作',
+        historyStatRead: '阅读邮件',
+        historyStatDraft: '草稿操作',
+        historyStatBlocked: '拦截 / 失败',
+        historyFilterAll: '全部',
+        historyFilterRead: '阅读邮件',
+        historyFilterDraft: '草稿箱',
+        historyFilterSearch: '搜索浏览',
+        historyFilterAnalyze: '智能分析',
+        historyFilterModify: '整理操作',
+        historyFilterBlocked: '拦截 / 失败',
+        historyLoading: '正在加载 Agent 操作历史...',
+        historyEmpty: '暂无 Agent 操作历史。在对话中输入 @mail 调用邮箱能力后，阅读过的邮件与撰写的草稿会实时显示在这里。',
+        historyFilterEmpty: '没有匹配当前筛选条件的操作记录。',
+        historyLoadMoreBtn: '加载更多（剩余 {remaining} 条）',
+        historyUnavailable: '当前运行的 DSH 后台服务尚未加载操作历史接口（HTTP 404），重启 DSH 后即可使用。',
+        historyPrivacyNote: '仅存储在本地 $DSH_HOME/dsh-exchange/activity.jsonl（权限 0600，最多保留 500 条），绝不保存邮件正文、附件内容或密码。',
+        historyOutcomeOk: '成功',
+        historyOutcomeDenied: '已拦截',
+        historyOutcomeError: '失败',
+        historySourceAudit: '基础审计',
+        act_list_folders: '查看文件夹',
+        act_search_emails: '搜索邮件',
+        act_read_email: '阅读邮件',
+        act_list_recent_emails: '浏览最近邮件',
+        act_save_draft: '新建草稿',
+        act_update_draft: '更新草稿',
+        act_delete_draft: '删除草稿',
+        act_get_thread: '重建邮件会话',
+        act_parse_jira_notifications: '解析 Jira 通知',
+        act_extract_todos: '提取待办事项',
+        act_summarize_project: '汇总项目进展',
+        act_download_attachment: '下载附件',
+        act_move_email: '移动邮件',
+        act_mark_email: '标记邮件',
+        act_delete_email: '删除邮件',
+        histFrom: '发件人：{val}',
+        histTo: '收件人：{val}',
+        histCcCount: '抄送 {count} 人',
+        histFolder: '目录：{val}',
+        histDraftReply: '回复原邮件',
+        histDraftOnly: '仅存草稿箱，未发送',
+        histChars: '约 {count} 字',
+        histMarkedRead: '已同步标为已读',
+        histAttachments: '{count} 个附件',
+        histHits: '命中 {count} 封',
+        histReturned: '返回 {count} 封',
+        histDays: '近 {days} 天',
+        histUnreadOnly: '仅未读',
+        histImportantOnly: '仅重要',
+        histFoldersSummary: '共 {total} 个目录，可读 {readable} 个',
+        histThreadCount: '共 {count} 封往来邮件',
+        histJiraSummary: '解析近 {days} 天 Jira 通知 · 命中 {count} 条',
+        histIssues: '工单：{val}',
+        histTodosSummary: '提取近 {days} 天待办 · 共 {count} 项',
+        histUrgentCount: '高优/紧急 {count} 项',
+        histProjectSummary: '汇总项目「{project}」（近 {days} 天）',
+        histProjectCounts: '关联 {related} 封邮件 · 阻塞 {blocking} 项 · 下一步 {actions} 项',
+        histAttachmentHeadline: '下载附件：{name}',
+        histMoveHeadline: '移动邮件至「{folder}」',
+        histMarkRead: '标为已读',
+        histMarkUnread: '标为未读',
+        histMarkFlagged: '加星标',
+        histMarkUnflagged: '取消星标',
+        histPermDeleteBlocked: '尝试永久删除邮件（已安全拦截 PERM_001）',
+        histDeleteRecoverable: '移至「已删除项目」（可恢复）',
+        histDeleteDraft: '删除草稿（移至已删除项目）',
+        histUpdatedFields: '更新字段：{val}',
+        histBlockedFolder: '尝试访问受限目录（已拦截）',
+        histSearchQuery: '关键词：「{q}」',
+        histReadFallback: '阅读「{folder}」中的邮件',
+        histReadFallbackNoFolder: '阅读邮件',
+        histDraftHeadline: '草稿：《{subject}》',
+        histUpdateDraftFallback: '更新已有草稿',
+        histRecentHeadline: '浏览近 {days} 天邮件',
+        histSearchFallback: '按条件搜索邮件',
+        histFoldersFallback: '获取邮箱目录列表',
+        histThreadFallback: '重建邮件往来会话',
+        histMarkFallback: '更新邮件状态标记',
       },
     };
 
@@ -587,6 +769,180 @@ window.__ModuleLoader__.load({
       .dsh-ex-switch[aria-checked="true"] .dsh-ex-switch-thumb {
         transform: translateX(18px);
       }
+      .dsh-ex-tabs {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px;
+        border-radius: 10px;
+        border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.2));
+        background: var(--dsw-alias-bg-layer-1, rgba(128,128,128,0.06));
+      }
+      .dsh-ex-tab {
+        appearance: none;
+        flex: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 7px 12px;
+        border-radius: 7px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--dsw-alias-label-secondary, #6b7280);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+      }
+      .dsh-ex-tab:hover:not(.dsh-ex-tab-active) {
+        color: var(--dsw-alias-label-primary, #111827);
+        background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.08));
+      }
+      .dsh-ex-tab-active {
+        background: var(--dsw-alias-bg-base, var(--dsw-alias-card-fill, #ffffff));
+        color: var(--dsw-alias-label-primary, #111827);
+        border-color: var(--dsw-alias-border-l2, rgba(128,128,128,0.22));
+        font-weight: 600;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+      }
+      .dsh-ex-tab-count {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 1px 7px;
+        border-radius: 999px;
+        corner-shape: round;
+        background: color-mix(in srgb, var(--dsw-alias-state-business-primary, #4176e6) 14%, transparent);
+        color: var(--dsw-alias-state-business-primary, #4176e6);
+      }
+      .dsh-ex-stat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 8px;
+      }
+      .dsh-ex-stat-card {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.18));
+        background: var(--dsw-alias-bg-base, transparent);
+      }
+      .dsh-ex-stat-val {
+        font-size: 18px;
+        font-weight: 700;
+        line-height: 1.2;
+        color: var(--dsw-alias-label-primary, #111827);
+      }
+      .dsh-ex-stat-val-warn {
+        color: var(--dsw-alias-state-error-primary, #dc2626);
+      }
+      .dsh-ex-stat-label {
+        font-size: 11px;
+        color: var(--dsw-alias-label-tertiary, #6b7280);
+      }
+      .dsh-ex-chips {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .dsh-ex-chip {
+        appearance: none;
+        padding: 4px 10px;
+        border-radius: 999px;
+        corner-shape: round;
+        border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.24));
+        background: var(--dsw-alias-bg-base, transparent);
+        color: var(--dsw-alias-label-secondary, #4b5563);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+      }
+      .dsh-ex-chip:hover:not(.dsh-ex-chip-active) {
+        background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.1));
+        color: var(--dsw-alias-label-primary, #111827);
+      }
+      .dsh-ex-chip-active {
+        background: color-mix(in srgb, var(--dsw-alias-state-business-primary, #4176e6) 14%, transparent);
+        border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary, #4176e6) 45%, transparent);
+        color: var(--dsw-alias-state-business-primary, #4176e6);
+        font-weight: 600;
+      }
+      .dsh-ex-activity-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .dsh-ex-activity-item {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 11px 13px;
+        border-radius: 8px;
+        border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.2));
+        border-left-width: 3px;
+        background: var(--dsw-alias-bg-base, transparent);
+      }
+      .dsh-ex-activity-cat-read { border-left-color: var(--dsw-alias-state-business-primary, #4176e6); }
+      .dsh-ex-activity-cat-draft { border-left-color: var(--dsw-alias-state-success-primary, #16a34a); }
+      .dsh-ex-activity-cat-search { border-left-color: #6366f1; }
+      .dsh-ex-activity-cat-analyze { border-left-color: #9333ea; }
+      .dsh-ex-activity-cat-modify { border-left-color: var(--dsw-alias-state-warn-label, #d97706); }
+      .dsh-ex-activity-cat-denied { border-left-color: var(--dsw-alias-state-error-primary, #dc2626); }
+      .dsh-ex-activity-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .dsh-ex-activity-headline {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--dsw-alias-label-primary, #111827);
+        word-break: break-word;
+      }
+      .dsh-ex-activity-details {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        font-size: 12px;
+        color: var(--dsw-alias-label-secondary, #4b5563);
+      }
+      .dsh-ex-activity-tag {
+        padding: 1px 7px;
+        border-radius: 5px;
+        background: var(--dsw-alias-bg-layer-1, rgba(128,128,128,0.08));
+        border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.16));
+        font-size: 11px;
+        color: var(--dsw-alias-label-secondary, #4b5563);
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .dsh-ex-activity-time {
+        font-size: 11px;
+        color: var(--dsw-alias-label-tertiary, #6b7280);
+        font-variant-numeric: tabular-nums;
+      }
+      .dsh-ex-pill-info {
+        color: var(--dsw-alias-state-business-primary, #4176e6);
+        border-color: color-mix(in srgb, currentColor 35%, transparent);
+        background: color-mix(in srgb, currentColor 11%, transparent);
+      }
+      .dsh-ex-empty-box {
+        padding: 24px 16px;
+        text-align: center;
+        border-radius: 8px;
+        border: 1px dashed var(--dsw-alias-border-l2, rgba(128,128,128,0.28));
+        color: var(--dsw-alias-label-secondary, #6b7280);
+        font-size: 12px;
+      }
     `;
 
     const STORAGE_KEY_SIDEBAR = 'dsh-exchange:showSidebarEntry';
@@ -936,6 +1292,168 @@ window.__ModuleLoader__.load({
       });
     }
 
+    const HISTORY_PAGE_SIZE = 50;
+    const EMPTY_HISTORY_STATS = {
+      total: 0,
+      read: 0,
+      draft: 0,
+      search: 0,
+      analyze: 0,
+      modify: 0,
+      denied: 0,
+      error: 0,
+    };
+
+    function formatBytes(bytes) {
+      const n = Number(bytes);
+      if (!Number.isFinite(n) || n < 0) return '0 B';
+      if (n < 1024) return `${Math.round(n)} B`;
+      if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+      return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+    }
+
+    function formatLocalTimestamp(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return String(iso);
+      const pad = (x) => String(x).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+
+    function formatActivityEntry(item, t) {
+      const action = String((item && item.action) || 'unknown');
+      const outcome = (item && item.outcome) || 'ok';
+      const folder = item && item.folder ? String(item.folder) : '';
+      const s = (item && item.summary && typeof item.summary === 'object') ? item.summary : {};
+      const actionKey = `act_${action}`;
+      const translatedAction = t(actionKey);
+      const actionLabel = translatedAction !== actionKey ? translatedAction : action;
+      const details = [];
+      let headline = actionLabel;
+
+      if (action === 'read_email') {
+        if (outcome === 'denied') {
+          headline = t('histBlockedFolder');
+        } else if (s.subject) {
+          headline = s.subject;
+        } else if (folder) {
+          headline = t('histReadFallback', { folder });
+        } else {
+          headline = t('histReadFallbackNoFolder');
+        }
+        if (s.from) details.push(t('histFrom', { val: s.from }));
+        if (folder) details.push(t('histFolder', { val: folder }));
+        if (s.attachmentCount > 0) details.push(t('histAttachments', { count: String(s.attachmentCount) }));
+        if (s.markAsRead) details.push(t('histMarkedRead'));
+      } else if (action === 'save_draft') {
+        headline = s.subject ? t('histDraftHeadline', { subject: s.subject }) : actionLabel;
+        if (Array.isArray(s.to) && s.to.length > 0) {
+          const toText = s.toCount > s.to.length ? `${s.to.join(', ')} (+${s.toCount - s.to.length})` : s.to.join(', ');
+          details.push(t('histTo', { val: toText }));
+        }
+        if (s.ccCount > 0) details.push(t('histCcCount', { count: String(s.ccCount) }));
+        if (s.isReply) details.push(t('histDraftReply'));
+        if (typeof s.bodyChars === 'number' && s.bodyChars > 0) {
+          details.push(t('histChars', { count: String(s.bodyChars) }));
+        }
+        if (outcome === 'ok') details.push(t('histDraftOnly'));
+      } else if (action === 'update_draft') {
+        headline = s.subject ? t('histDraftHeadline', { subject: s.subject }) : t('histUpdateDraftFallback');
+        if (Array.isArray(s.updatedFields) && s.updatedFields.length > 0) {
+          details.push(t('histUpdatedFields', { val: s.updatedFields.join(', ') }));
+        }
+        if (Array.isArray(s.to) && s.to.length > 0) {
+          details.push(t('histTo', { val: s.to.join(', ') }));
+        }
+      } else if (action === 'delete_draft') {
+        headline = t('histDeleteDraft');
+      } else if (action === 'search_emails') {
+        headline = s.query
+          ? t('histSearchQuery', { q: s.query })
+          : s.subject
+            ? t('histSearchQuery', { q: s.subject })
+            : t('histSearchFallback');
+        if (folder) details.push(t('histFolder', { val: folder }));
+        const hitCount = typeof s.total === 'number' ? s.total : item.count;
+        if (typeof hitCount === 'number') details.push(t('histHits', { count: String(hitCount) }));
+        if (s.from) details.push(t('histFrom', { val: s.from }));
+        if (typeof s.days === 'number') details.push(t('histDays', { days: String(s.days) }));
+        if (s.unreadOnly) details.push(t('histUnreadOnly'));
+        if (s.importantOnly) details.push(t('histImportantOnly'));
+      } else if (action === 'list_recent_emails') {
+        headline = t('histRecentHeadline', { days: String(s.days || 7) });
+        const retCount = typeof s.returnedCount === 'number' ? s.returnedCount : item.count;
+        if (typeof retCount === 'number') details.push(t('histReturned', { count: String(retCount) }));
+        if (s.unreadOnly) details.push(t('histUnreadOnly'));
+        if (Array.isArray(s.sampleSubjects) && s.sampleSubjects.length > 0) {
+          details.push(s.sampleSubjects.join(' · '));
+        }
+      } else if (action === 'list_folders') {
+        headline = t('histFoldersFallback');
+        if (typeof s.folderCount === 'number' && typeof s.readableCount === 'number') {
+          details.push(t('histFoldersSummary', { total: String(s.folderCount), readable: String(s.readableCount) }));
+        } else if (typeof item.count === 'number') {
+          details.push(t('histReturned', { count: String(item.count) }));
+        }
+      } else if (action === 'get_thread') {
+        headline = s.subject ? s.subject : t('histThreadFallback');
+        const msgCount = typeof s.messageCount === 'number' ? s.messageCount : item.count;
+        if (typeof msgCount === 'number') details.push(t('histThreadCount', { count: String(msgCount) }));
+        if (folder) details.push(t('histFolder', { val: folder }));
+      } else if (action === 'parse_jira_notifications') {
+        const cnt = typeof s.matchedCount === 'number' ? s.matchedCount : (item.count ?? 0);
+        headline = t('histJiraSummary', { days: String(s.days || 7), count: String(cnt) });
+        if (Array.isArray(s.issueKeys) && s.issueKeys.length > 0) {
+          details.push(t('histIssues', { val: s.issueKeys.join(', ') }));
+        }
+      } else if (action === 'extract_todos') {
+        const cnt = typeof s.todoCount === 'number' ? s.todoCount : (item.count ?? 0);
+        headline = t('histTodosSummary', { days: String(s.days || 7), count: String(cnt) });
+        if (s.urgentCount > 0) details.push(t('histUrgentCount', { count: String(s.urgentCount) }));
+        if (Array.isArray(s.sampleTitles) && s.sampleTitles.length > 0) {
+          details.push(s.sampleTitles.join(' · '));
+        }
+      } else if (action === 'summarize_project') {
+        headline = s.project
+          ? t('histProjectSummary', { project: s.project, days: String(s.days || 30) })
+          : actionLabel;
+        if (typeof s.relatedCount === 'number') {
+          details.push(t('histProjectCounts', {
+            related: String(s.relatedCount),
+            blocking: String(s.blockingCount || 0),
+            actions: String(s.nextActionCount || 0),
+          }));
+        } else if (typeof item.count === 'number') {
+          details.push(t('histHits', { count: String(item.count) }));
+        }
+      } else if (action === 'download_attachment') {
+        headline = s.fileName ? t('histAttachmentHeadline', { name: s.fileName }) : actionLabel;
+        if (typeof s.size === 'number') details.push(formatBytes(s.size));
+      } else if (action === 'move_email') {
+        const dest = s.targetFolder || folder;
+        headline = dest ? t('histMoveHeadline', { folder: dest }) : actionLabel;
+      } else if (action === 'mark_email') {
+        const marks = [];
+        if (s.isRead === true) marks.push(t('histMarkRead'));
+        if (s.isRead === false) marks.push(t('histMarkUnread'));
+        if (s.isFlagged === true) marks.push(t('histMarkFlagged'));
+        if (s.isFlagged === false) marks.push(t('histMarkUnflagged'));
+        headline = marks.length > 0 ? `${actionLabel}: ${marks.join(' · ')}` : t('histMarkFallback');
+      } else if (action === 'delete_email') {
+        headline = s.permanentAttempt ? t('histPermDeleteBlocked') : t('histDeleteRecoverable');
+        if (folder) details.push(t('histFolder', { val: folder }));
+      } else {
+        if (folder) details.push(t('histFolder', { val: folder }));
+        if (typeof item.count === 'number') details.push(t('histReturned', { count: String(item.count) }));
+      }
+
+      return {
+        actionLabel,
+        headline,
+        details,
+      };
+    }
+
     function ExchangeSettingsPanel(props) {
       const t = props.t || ((k) => k);
       const hideHeader = Boolean(props && props.hideHeader);
@@ -983,6 +1501,22 @@ window.__ModuleLoader__.load({
       const [saving, setSaving] = useState(false);
       const [confirmingReset, setConfirmingReset] = useState(false);
       const [feedback, setFeedback] = useState(null); // { scope: 'top' | 'bottom', tone: 'ok' | 'err' | 'warn', text: string }
+
+      // Segmented tab & Agent Activity History states (declared after `loading` to preserve hook ordering)
+      const [activeTab, setActiveTab] = useState('settings'); // 'settings' | 'history'
+      const [historyItems, setHistoryItems] = useState([]);
+      const [historyTotal, setHistoryTotal] = useState(0);
+      const [historyHasMore, setHistoryHasMore] = useState(false);
+      const [historyStats, setHistoryStats] = useState(EMPTY_HISTORY_STATS);
+      const [historyCategory, setHistoryCategory] = useState('all');
+      const [historyQuery, setHistoryQuery] = useState('');
+      const [historyLoading, setHistoryLoading] = useState(false);
+      const [historyError, setHistoryError] = useState('');
+      const [historyFeedback, setHistoryFeedback] = useState(null); // { tone: 'ok' | 'err', text: string }
+      const [confirmingClearHistory, setConfirmingClearHistory] = useState(false);
+      const [clearingHistory, setClearingHistory] = useState(false);
+      const historyReqSeqRef = useRef(0);
+      const historyDebounceRef = useRef(null);
 
       const selectedFolders = modeFolders[mode] || [];
       const setSelectedFoldersForMode = useCallback((targetMode, updater) => {
@@ -1063,9 +1597,120 @@ window.__ModuleLoader__.load({
         }
       }, []);
 
+      const loadHistory = useCallback(async ({
+        category = historyCategory,
+        q = historyQuery,
+        offset = 0,
+        append = false,
+        silent = false,
+      } = {}) => {
+        const reqSeq = ++historyReqSeqRef.current;
+        if (!silent) {
+          setHistoryLoading(true);
+          setHistoryError('');
+        }
+        try {
+          const params = new URLSearchParams();
+          params.set('limit', String(HISTORY_PAGE_SIZE));
+          params.set('offset', String(offset));
+          if (category && category !== 'all') params.set('category', category);
+          if (q && q.trim()) params.set('q', q.trim());
+          const resp = await fetch(`dsh-exchange/api/history?${params.toString()}`, { method: 'GET' });
+          const data = await readJsonSafely(resp);
+          if (!mountedRef.current || reqSeq !== historyReqSeqRef.current) return;
+          if (resp.status === 404) {
+            if (!silent) setHistoryError(tRef.current('historyUnavailable'));
+            return;
+          }
+          if (!resp.ok || !data.ok) {
+            if (!silent) setHistoryError(formatApiError(data, resp.status, tRef.current));
+            return;
+          }
+          const incoming = Array.isArray(data.items) ? data.items : [];
+          setHistoryItems((prev) => (append ? prev.concat(incoming) : incoming));
+          setHistoryTotal(Number.isFinite(Number(data.total)) ? Number(data.total) : incoming.length);
+          setHistoryHasMore(Boolean(data.hasMore));
+          if (data.stats && typeof data.stats === 'object') {
+            setHistoryStats({ ...EMPTY_HISTORY_STATS, ...data.stats });
+          }
+        } catch (err) {
+          if (!mountedRef.current || reqSeq !== historyReqSeqRef.current) return;
+          if (!silent) setHistoryError(err?.message || String(err));
+        } finally {
+          if (mountedRef.current && reqSeq === historyReqSeqRef.current && !silent) {
+            setHistoryLoading(false);
+          }
+        }
+      }, [historyCategory, historyQuery]);
+
       useEffect(() => {
         void loadStatus();
+        void loadHistory({ category: 'all', q: '', offset: 0, append: false, silent: true });
       }, [loadStatus]);
+
+      useEffect(() => {
+        return () => {
+          if (historyDebounceRef.current) {
+            clearTimeout(historyDebounceRef.current);
+            historyDebounceRef.current = null;
+          }
+        };
+      }, []);
+
+      const handleSelectTab = async (nextTab) => {
+        setActiveTab(nextTab);
+        setHistoryFeedback(null);
+        setConfirmingClearHistory(false);
+        if (nextTab === 'history') {
+          await loadHistory({ category: historyCategory, q: historyQuery, offset: 0, append: false, silent: false });
+        }
+      };
+
+      const handleSelectHistoryCategory = async (nextCat) => {
+        setHistoryCategory(nextCat);
+        setHistoryFeedback(null);
+        await loadHistory({ category: nextCat, q: historyQuery, offset: 0, append: false, silent: false });
+      };
+
+      const handleHistoryQueryChange = (nextQ) => {
+        setHistoryQuery(nextQ);
+        if (historyDebounceRef.current) clearTimeout(historyDebounceRef.current);
+        historyDebounceRef.current = setTimeout(() => {
+          historyDebounceRef.current = null;
+          void loadHistory({ category: historyCategory, q: nextQ, offset: 0, append: false, silent: false });
+        }, 220);
+      };
+
+      const handleClearHistoryConfirmed = async () => {
+        if (clearingHistory) return;
+        setClearingHistory(true);
+        setHistoryFeedback(null);
+        try {
+          const resp = await fetch('dsh-exchange/api/history/clear', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({}),
+          });
+          const data = await readJsonSafely(resp);
+          if (!mountedRef.current) return;
+          if (!resp.ok || !data.ok) {
+            setHistoryFeedback({ tone: 'err', text: formatApiError(data, resp.status, t) });
+            return;
+          }
+          setHistoryItems([]);
+          setHistoryTotal(0);
+          setHistoryHasMore(false);
+          setHistoryStats(EMPTY_HISTORY_STATS);
+          setConfirmingClearHistory(false);
+          setHistoryFeedback({ tone: 'ok', text: t('historyClearedOk') });
+        } catch (err) {
+          if (mountedRef.current) {
+            setHistoryFeedback({ tone: 'err', text: err?.message || String(err) });
+          }
+        } finally {
+          if (mountedRef.current) setClearingHistory(false);
+        }
+      };
 
       useEffect(() => {
         if (!activeSidebarController) return undefined;
@@ -1427,10 +2072,320 @@ window.__ModuleLoader__.load({
                 : t('emergencyLockBtn'),
           ),
         ),
-        // Exchange Connection Card
+        // Segmented Tabs: Configuration | Agent Activity History
         h(
-          'section',
-          { className: 'dsh-ex-card' },
+          'div',
+          { className: 'dsh-ex-tabs', role: 'tablist', 'aria-label': t('title') },
+          h(
+            'button',
+            {
+              type: 'button',
+              role: 'tab',
+              id: 'dsh-ex-tab-settings',
+              'aria-selected': activeTab === 'settings',
+              'aria-controls': 'dsh-ex-tabpanel-settings',
+              className: `dsh-ex-tab ${activeTab === 'settings' ? 'dsh-ex-tab-active' : ''}`,
+              onClick: () => handleSelectTab('settings'),
+            },
+            t('tabSettings'),
+          ),
+          h(
+            'button',
+            {
+              type: 'button',
+              role: 'tab',
+              id: 'dsh-ex-tab-history',
+              'aria-selected': activeTab === 'history',
+              'aria-controls': 'dsh-ex-tabpanel-history',
+              className: `dsh-ex-tab ${activeTab === 'history' ? 'dsh-ex-tab-active' : ''}`,
+              onClick: () => handleSelectTab('history'),
+            },
+            h('span', null, t('tabHistory')),
+            historyStats.total > 0
+              ? h('span', { className: 'dsh-ex-tab-count' }, String(historyStats.total))
+              : null,
+          ),
+        ),
+        activeTab === 'history'
+          ? h(
+              'div',
+              {
+                role: 'tabpanel',
+                id: 'dsh-ex-tabpanel-history',
+                'aria-labelledby': 'dsh-ex-tab-history',
+                style: { display: 'flex', flexDirection: 'column', gap: '14px' },
+              },
+              h(
+                'section',
+                { className: 'dsh-ex-card' },
+                h(
+                  'div',
+                  { className: 'dsh-ex-card-header' },
+                  h(
+                    'div',
+                    { style: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, flex: 1 } },
+                    h('h3', { className: 'dsh-ex-card-title' }, t('historyTitle')),
+                    h('span', { className: 'dsh-ex-hint' }, t('historySubtitle')),
+                  ),
+                  h(
+                    'div',
+                    { className: 'dsh-ex-inline' },
+                    h(
+                      'button',
+                      {
+                        type: 'button',
+                        className: 'dsh-ex-btn',
+                        'data-testid': 'dsh-ex-history-refresh-btn',
+                        disabled: historyLoading,
+                        onClick: () =>
+                          loadHistory({ category: historyCategory, q: historyQuery, offset: 0, append: false, silent: false }),
+                      },
+                      historyLoading ? t('historyRefreshingBtn') : t('historyRefreshBtn'),
+                    ),
+                    h(
+                      'button',
+                      {
+                        type: 'button',
+                        className: 'dsh-ex-btn dsh-ex-btn-danger',
+                        'data-testid': 'dsh-ex-history-clear-btn',
+                        disabled: clearingHistory || confirmingClearHistory || historyStats.total === 0,
+                        onClick: () => {
+                          setHistoryFeedback(null);
+                          setConfirmingClearHistory(true);
+                        },
+                      },
+                      t('historyClearBtn'),
+                    ),
+                  ),
+                ),
+                // Summary KPI strip
+                h(
+                  'div',
+                  { className: 'dsh-ex-stat-grid' },
+                  h(
+                    'div',
+                    { className: 'dsh-ex-stat-card' },
+                    h('span', { className: 'dsh-ex-stat-val' }, String(historyStats.total)),
+                    h('span', { className: 'dsh-ex-stat-label' }, t('historyStatTotal')),
+                  ),
+                  h(
+                    'div',
+                    { className: 'dsh-ex-stat-card' },
+                    h('span', { className: 'dsh-ex-stat-val' }, String(historyStats.read)),
+                    h('span', { className: 'dsh-ex-stat-label' }, t('historyStatRead')),
+                  ),
+                  h(
+                    'div',
+                    { className: 'dsh-ex-stat-card' },
+                    h('span', { className: 'dsh-ex-stat-val' }, String(historyStats.draft)),
+                    h('span', { className: 'dsh-ex-stat-label' }, t('historyStatDraft')),
+                  ),
+                  h(
+                    'div',
+                    { className: 'dsh-ex-stat-card' },
+                    h(
+                      'span',
+                      {
+                        className: `dsh-ex-stat-val ${historyStats.denied + historyStats.error > 0 ? 'dsh-ex-stat-val-warn' : ''}`,
+                      },
+                      String(historyStats.denied + historyStats.error),
+                    ),
+                    h('span', { className: 'dsh-ex-stat-label' }, t('historyStatBlocked')),
+                  ),
+                ),
+                // Category filter chips + search input
+                h(
+                  'div',
+                  { className: 'dsh-ex-chips', role: 'group', 'aria-label': t('historyTitle') },
+                  ...[
+                    ['all', 'historyFilterAll'],
+                    ['read', 'historyFilterRead'],
+                    ['draft', 'historyFilterDraft'],
+                    ['search', 'historyFilterSearch'],
+                    ['analyze', 'historyFilterAnalyze'],
+                    ['modify', 'historyFilterModify'],
+                    ['blocked', 'historyFilterBlocked'],
+                  ].map(([catKey, labelKey]) =>
+                    h(
+                      'button',
+                      {
+                        key: catKey,
+                        type: 'button',
+                        className: `dsh-ex-chip ${historyCategory === catKey ? 'dsh-ex-chip-active' : ''}`,
+                        'aria-pressed': historyCategory === catKey,
+                        onClick: () => handleSelectHistoryCategory(catKey),
+                      },
+                      t(labelKey),
+                    ),
+                  ),
+                ),
+                h('input', {
+                  className: 'dsh-ex-input',
+                  type: 'search',
+                  value: historyQuery,
+                  placeholder: t('historySearchPlaceholder'),
+                  onChange: (e) => handleHistoryQueryChange(e.target.value),
+                  onKeyDown: (e) => {
+                    if (e.key === 'Enter') {
+                      if (historyDebounceRef.current) {
+                        clearTimeout(historyDebounceRef.current);
+                        historyDebounceRef.current = null;
+                      }
+                      void loadHistory({ category: historyCategory, q: historyQuery, offset: 0, append: false, silent: false });
+                    }
+                  },
+                }),
+                historyFeedback
+                  ? h(
+                      'div',
+                      {
+                        role: historyFeedback.tone === 'err' ? 'alert' : 'status',
+                        className: `dsh-ex-banner ${historyFeedback.tone === 'ok' ? 'dsh-ex-banner-ok' : 'dsh-ex-banner-err'}`,
+                      },
+                      historyFeedback.text,
+                    )
+                  : null,
+                confirmingClearHistory
+                  ? h(
+                      'div',
+                      { className: 'dsh-ex-banner dsh-ex-banner-warn', role: 'alert' },
+                      h('span', null, t('historyClearConfirmText')),
+                      h(
+                        'div',
+                        { className: 'dsh-ex-inline' },
+                        h(
+                          'button',
+                          {
+                            type: 'button',
+                            className: 'dsh-ex-btn dsh-ex-btn-danger',
+                            'data-testid': 'dsh-ex-history-clear-confirm',
+                            disabled: clearingHistory,
+                            onClick: handleClearHistoryConfirmed,
+                          },
+                          clearingHistory ? t('historyClearingBtn') : t('historyClearConfirmBtn'),
+                        ),
+                        h(
+                          'button',
+                          {
+                            type: 'button',
+                            className: 'dsh-ex-btn',
+                            disabled: clearingHistory,
+                            onClick: () => setConfirmingClearHistory(false),
+                          },
+                          t('cancelChange'),
+                        ),
+                      ),
+                    )
+                  : null,
+                historyError
+                  ? h('div', { className: 'dsh-ex-banner dsh-ex-banner-err', role: 'alert' }, historyError)
+                  : null,
+                historyLoading && historyItems.length === 0
+                  ? h('div', { className: 'dsh-ex-empty-box', role: 'status' }, t('historyLoading'))
+                  : !historyError && historyItems.length === 0
+                    ? h(
+                        'div',
+                        { className: 'dsh-ex-empty-box' },
+                        historyCategory !== 'all' || historyQuery.trim()
+                          ? t('historyFilterEmpty')
+                          : t('historyEmpty'),
+                      )
+                    : h(
+                        'div',
+                        { className: 'dsh-ex-activity-list', role: 'list' },
+                        ...historyItems.map((item) => {
+                          const fmt = formatActivityEntry(item, t);
+                          const isDenied = item.outcome === 'denied';
+                          const isError = item.outcome === 'error';
+                          const accentClass = isDenied || isError
+                            ? 'dsh-ex-activity-cat-denied'
+                            : `dsh-ex-activity-cat-${item.category || 'search'}`;
+                          const outcomePillClass = isDenied
+                            ? 'dsh-ex-pill-deny'
+                            : isError
+                              ? 'dsh-ex-pill-warn'
+                              : 'dsh-ex-pill-allow';
+                          const outcomeText = isDenied
+                            ? (item.code ? `${t('historyOutcomeDenied')} · ${item.code}` : t('historyOutcomeDenied'))
+                            : isError
+                              ? (item.code ? `${t('historyOutcomeError')} · ${item.code}` : t('historyOutcomeError'))
+                              : t('historyOutcomeOk');
+                          return h(
+                            'article',
+                            {
+                              key: item.id || `${item.ts}-${item.action}`,
+                              role: 'listitem',
+                              className: `dsh-ex-activity-item ${accentClass}`,
+                            },
+                            h(
+                              'div',
+                              { className: 'dsh-ex-activity-top' },
+                              h(
+                                'div',
+                                { className: 'dsh-ex-inline' },
+                                h('span', { className: 'dsh-ex-pill dsh-ex-pill-info' }, fmt.actionLabel),
+                                h('span', { className: `dsh-ex-pill ${outcomePillClass}` }, outcomeText),
+                                item.source === 'audit'
+                                  ? h('span', { className: 'dsh-ex-pill dsh-ex-pill-neutral' }, t('historySourceAudit'))
+                                  : null,
+                              ),
+                              h(
+                                'span',
+                                { className: 'dsh-ex-activity-time' },
+                                `${formatLocalTimestamp(item.ts)} · ${item.elapsedMs ?? 0}ms`,
+                              ),
+                            ),
+                            h('div', { className: 'dsh-ex-activity-headline' }, fmt.headline),
+                            fmt.details.length > 0
+                              ? h(
+                                  'div',
+                                  { className: 'dsh-ex-activity-details' },
+                                  ...fmt.details.map((d, idx) =>
+                                    h('span', { key: `${idx}-${d}`, className: 'dsh-ex-activity-tag', title: d }, d),
+                                  ),
+                                )
+                              : null,
+                          );
+                        }),
+                      ),
+                historyHasMore
+                  ? h(
+                      'div',
+                      { style: { display: 'flex', justifyContent: 'center' } },
+                      h(
+                        'button',
+                        {
+                          type: 'button',
+                          className: 'dsh-ex-btn',
+                          disabled: historyLoading,
+                          onClick: () =>
+                            loadHistory({
+                              category: historyCategory,
+                              q: historyQuery,
+                              offset: historyItems.length,
+                              append: true,
+                              silent: false,
+                            }),
+                        },
+                        t('historyLoadMoreBtn', { remaining: String(Math.max(0, historyTotal - historyItems.length)) }),
+                      ),
+                    )
+                  : null,
+                h('div', { className: 'dsh-ex-limits' }, t('historyPrivacyNote')),
+              ),
+            )
+          : h(
+              'div',
+              {
+                role: 'tabpanel',
+                id: 'dsh-ex-tabpanel-settings',
+                'aria-labelledby': 'dsh-ex-tab-settings',
+                style: { display: 'flex', flexDirection: 'column', gap: '16px' },
+              },
+              // Exchange Connection Card
+              h(
+                'section',
+                { className: 'dsh-ex-card' },
           h('h3', { className: 'dsh-ex-card-title' }, t('sectionAccount')),
           h(
             'div',
@@ -1890,6 +2845,7 @@ window.__ModuleLoader__.load({
               : null,
           ),
         ),
+            ),
       );
     }
 
@@ -1908,6 +2864,7 @@ window.__ModuleLoader__.load({
       __isFolderIndeterminate: isFolderIndeterminate,
       __validateClientServerUrl: validateClientServerUrl,
       __formatApiError: formatApiError,
+      __formatActivityEntry: formatActivityEntry,
       __matchesMailTrigger: matchesMailTrigger,
       __getSidebarController() {
         return activeSidebarController;

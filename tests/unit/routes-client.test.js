@@ -996,3 +996,248 @@ test('client.js registers dynamic sidebar.panellist + main page, leaves panel on
     assert.equal(env.activeSlots.some((r) => r.opts.name === 'sidebar.panellist'), false, 'disposed controller must not re-mount slots')
   }
 })
+
+test('client.js renders Configuration/Activity History tabs, formats all activity types cleanly, supports filtering & 2-step clear, and handles 404 fallback', async () => {
+  const clientCode = await readFile(resolve(import.meta.dirname, '../../client.js'), 'utf8')
+
+  let historyResponse = {
+    ok: true,
+    status: 200,
+    body: {
+      ok: true,
+      items: [
+        {
+          id: 'a1',
+          ts: '2026-11-26T02:00:00.000Z',
+          action: 'save_draft',
+          category: 'draft',
+          outcome: 'ok',
+          code: null,
+          folder: '草稿箱',
+          emailId: 'draft-1',
+          elapsedMs: 185,
+          source: 'activity',
+          summary: {
+            subject: 'Re: Widevine L1 Follow-up',
+            to: ['support@google.com'],
+            toCount: 1,
+            ccCount: 1,
+            isReply: true,
+            bodyChars: 340,
+          },
+        },
+        {
+          id: 'a2',
+          ts: '2026-11-26T01:55:00.000Z',
+          action: 'read_email',
+          category: 'read',
+          outcome: 'ok',
+          code: null,
+          folder: '认证项目/Widevine',
+          emailId: 'mail-1',
+          elapsedMs: 92,
+          source: 'activity',
+          summary: {
+            subject: 'Widevine L1 Certification Status',
+            from: 'support@google.com',
+            markAsRead: true,
+          },
+        },
+      ],
+      total: 2,
+      unfilteredTotal: 2,
+      hasMore: false,
+      stats: { total: 2, read: 1, draft: 1, search: 0, analyze: 0, modify: 0, denied: 0, error: 0 },
+    },
+  }
+  const fetchCalls = []
+  let loaded = null
+  const sandbox = {
+    window: {
+      __ModuleLoader__: { load(entry) { loaded = entry } },
+      localStorage: { getItem() { return null }, setItem() {} },
+    },
+    localStorage: { getItem() { return null }, setItem() {} },
+    fetch: async (url, opts) => {
+      fetchCalls.push({ url, method: opts?.method || 'GET' })
+      if (url === 'dsh-exchange/api/status') {
+        return {
+          ok: true,
+          status: 200,
+          async text() { return JSON.stringify({ ok: true, account: {}, access: { mode: 'blacklist', folders: [], emergencyLock: false }, ui: { showSidebarEntry: true } }) },
+        }
+      }
+      if (String(url).startsWith('dsh-exchange/api/history/clear')) {
+        historyResponse = {
+          ok: true,
+          status: 200,
+          body: { ok: true, items: [], total: 0, unfilteredTotal: 0, hasMore: false, stats: { total: 0, read: 0, draft: 0, search: 0, analyze: 0, modify: 0, denied: 0, error: 0 } },
+        }
+        return { ok: true, status: 200, async text() { return JSON.stringify({ ok: true, clearedAt: '2026-11-26T02:10:00.000Z' }) } }
+      }
+      if (String(url).startsWith('dsh-exchange/api/history')) {
+        return {
+          ok: historyResponse.ok,
+          status: historyResponse.status,
+          async text() { return JSON.stringify(historyResponse.body) },
+        }
+      }
+      return { ok: false, status: 404, async text() { return '{}' } }
+    },
+    console,
+    setTimeout,
+    clearTimeout,
+    URL,
+    URLSearchParams,
+  }
+  vm.runInNewContext(clientCode, sandbox, { filename: 'client.js' })
+
+  const states = []
+  const refs = []
+  let stateIdx = 0
+  let refIdx = 0
+  const fakeReact = {
+    createElement(type, props, ...children) { return { type, props, children } },
+    useState(init) {
+      const i = stateIdx++
+      if (states.length <= i) states.push(typeof init === 'function' ? init() : init)
+      return [states[i], (v) => { states[i] = typeof v === 'function' ? v(states[i]) : v }]
+    },
+    useEffect() {},
+    useCallback(fn) { return fn },
+    useMemo(fn) { return fn() },
+    useRef(init) {
+      const i = refIdx++
+      if (refs.length <= i) refs.push({ current: init })
+      return refs[i]
+    },
+  }
+  const plugin = loaded.factory((spec) => {
+    if (spec === 'react') return fakeReact
+    throw new Error(`Unexpected require: ${spec}`)
+  })
+
+  const registeredLocales = {}
+  const slots = []
+  const mockCtx = {
+    get() { return undefined },
+    locale: {
+      register(ns, dicts) { registeredLocales[ns] = dicts; return () => {} },
+      bind(ns) { return (key, vars) => {
+        let s = registeredLocales[ns]?.zh?.[key] ?? key
+        if (vars) {
+          for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, String(v))
+        }
+        return s
+      } },
+    },
+    slots: {
+      inject(_n, cb) { cb(); return () => {} },
+      register(opts, comp) { slots.push({ opts, comp }); return () => {} },
+    },
+    inject() { return () => {} },
+    effect(fn) { fn(); return () => {} },
+  }
+  plugin.apply(mockCtx)
+
+  // 1. Verify __formatActivityEntry helper for key activity types in both ZH and EN
+  assert.equal(typeof plugin.__formatActivityEntry, 'function')
+  const makeT = (lang) => (key, vars) => {
+    let s = registeredLocales['dsh-exchange'][lang][key] ?? key
+    if (vars) {
+      for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, String(v))
+    }
+    return s
+  }
+  const zhT = makeT('zh')
+  const enT = makeT('en')
+
+  const fmtReadZh = plugin.__formatActivityEntry(historyResponse.body.items[1], zhT)
+  assert.match(fmtReadZh.headline, /Widevine L1 Certification Status/)
+  assert.match(fmtReadZh.details.join(' '), /support@google\.com/)
+
+  const fmtDraftZh = plugin.__formatActivityEntry(historyResponse.body.items[0], zhT)
+  assert.match(fmtDraftZh.headline, /Re: Widevine L1 Follow-up/)
+  assert.match(fmtDraftZh.details.join(' '), /support@google\.com/)
+  assert.match(fmtDraftZh.details.join(' '), /340/)
+
+  const fmtDeniedDelEn = plugin.__formatActivityEntry({
+    action: 'delete_email',
+    outcome: 'denied',
+    code: 'PERM_001',
+    folder: '人事资料',
+    source: 'activity',
+    summary: { permanentAttempt: true },
+  }, enT)
+  assert.match(fmtDeniedDelEn.headline, /permanent delete/i)
+
+  const fmtAuditLegacyZh = plugin.__formatActivityEntry({
+    action: 'search_emails',
+    outcome: 'ok',
+    folder: '收件箱',
+    count: 6,
+    source: 'audit',
+    summary: {},
+  }, zhT)
+  assert.match(fmtAuditLegacyZh.actionLabel, /搜索邮件/)
+  assert.match(fmtAuditLegacyZh.details.join(' '), /6/)
+
+  // 2. Render ExchangeSettingsPanel and verify tablist + switch to History tab + 2-step clear
+  const settingsEntry = slots.find((r) => r.opts.name === 'settings.section')
+  const renderPanel = () => {
+    stateIdx = 0
+    refIdx = 0
+    return settingsEntry.comp({ t: zhT })
+  }
+  const collectNodes = (tree, pred, out = []) => {
+    if (!tree || typeof tree !== 'object') return out
+    if (pred(tree)) out.push(tree)
+    if (Array.isArray(tree.children)) {
+      for (const c of tree.children) collectNodes(c, pred, out)
+    }
+    return out
+  }
+  const collectText = (tree, parts = []) => {
+    if (typeof tree === 'string' || typeof tree === 'number') {
+      parts.push(String(tree))
+    } else if (tree && typeof tree === 'object' && Array.isArray(tree.children)) {
+      for (const c of tree.children) collectText(c, parts)
+    }
+    return parts.join(' ')
+  }
+
+  const initialTree = renderPanel()
+  const tabs = collectNodes(initialTree, (n) => n.props?.role === 'tab')
+  assert.equal(tabs.length, 2, 'must render Configuration and Activity History tabs')
+  assert.equal(tabs[0].props['aria-selected'], true)
+  assert.equal(tabs[1].props['aria-selected'], false)
+
+  // Switch to History tab (triggers loadHistory)
+  await tabs[1].props.onClick()
+  const historyTree = renderPanel()
+  const historyTabs = collectNodes(historyTree, (n) => n.props?.role === 'tab')
+  assert.equal(historyTabs[1].props['aria-selected'], true)
+  const historyText = collectText(historyTree)
+  assert.match(historyText, /Widevine L1 Certification Status/)
+  assert.match(historyText, /Re: Widevine L1 Follow-up/)
+  assert.ok(fetchCalls.some((c) => c.url.startsWith('dsh-exchange/api/history') && c.method === 'GET'))
+
+  // 2-step Clear History confirmation
+  const clearBtn = collectNodes(historyTree, (n) => n.type === 'button' && n.props?.['data-testid'] === 'dsh-ex-history-clear-btn')[0]
+  assert.ok(clearBtn, 'History tab must render Clear History button')
+  clearBtn.props.onClick()
+  const confirmTree = renderPanel()
+  const confirmClearBtn = collectNodes(confirmTree, (n) => n.type === 'button' && n.props?.['data-testid'] === 'dsh-ex-history-clear-confirm')[0]
+  assert.ok(confirmClearBtn, 'Clicking Clear History must show 2-step confirm button')
+  await confirmClearBtn.props.onClick()
+  assert.ok(fetchCalls.some((c) => c.url === 'dsh-exchange/api/history/clear' && c.method === 'POST'))
+
+  // 3. Graceful 404 handling when running against an older backend without /api/history
+  historyResponse = { ok: false, status: 404, body: {} }
+  const afterClearTree = renderPanel()
+  const refreshBtn = collectNodes(afterClearTree, (n) => n.type === 'button' && n.props?.['data-testid'] === 'dsh-ex-history-refresh-btn')[0]
+  assert.ok(refreshBtn)
+  await refreshBtn.props.onClick()
+  const tree404 = renderPanel()
+  assert.ok(collectNodes(tree404, (n) => n.props?.role === 'alert').length >= 1, '404 history endpoint must render graceful alert banner')
+})

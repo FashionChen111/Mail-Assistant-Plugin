@@ -1,9 +1,8 @@
-import * as ews from 'ews-javascript-api'
-import * as xhrModule from '@ewsjs/xhr'
+import ews from '../../dist/ews.cjs'
 import { ERROR_CODES, ExchangeError, isAbortError, throwIfAborted } from '../errors.js'
 import { validateServerUrl } from '../state.js'
 
-const XhrApi = xhrModule.XhrApi ?? xhrModule.default?.XhrApi
+const { XhrApi } = ews
 
 export const DEFAULT_RETRY_DELAYS_MS = Object.freeze([1000, 2000, 4000])
 

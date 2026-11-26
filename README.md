@@ -62,7 +62,7 @@ Designed for enterprise and certification project management workflows (Widevine
 
 Use a Web profile for the settings and activity history pages. The examples use the built-in `web` profile. CLI installation requires `pnpm` on `PATH`.
 
-Check out the `0.2.0-rc1` branch in your local clone and restore its locked dependencies.
+Check out the `0.2.0-rc1` branch in your local clone. `npm ci` restores the locked dependencies and builds the EWS runtime used by this branch.
 
 ```bash
 git switch 0.2.0-rc1

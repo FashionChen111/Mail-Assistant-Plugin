@@ -56,7 +56,7 @@ test('isUserMessageTriggeringMail only accepts user-authored messages', () => {
   )
 })
 
-test('createSessionScope reads and unregisters the rc.1 projection for first turns and replay', async () => {
+test('rc.1 session projection activates only that session from its own user messages', () => {
   let registeredDef = null
   let disposed = false
   const states = new WeakMap()
@@ -69,16 +69,17 @@ test('createSessionScope reads and unregisters the rc.1 projection for first tur
       stateOf(session, key) {
         assert.equal(key, 'dsh-exchange:activated')
         if (disposed) return undefined
-        return states.get(session) ?? registeredDef.init()
+        return states.get(session) ?? registeredDef.init({}, 0)
       },
     },
   }
 
-  const scope = await createSessionScope(ctx, { explicitPrefix: '@mail' })
+  const scope = createSessionScope(ctx, { explicitPrefix: '@mail' })
   assert.ok(registeredDef)
   assert.equal(registeredDef.key, 'dsh-exchange:activated')
-  assert.equal(registeredDef.stateSchema.parse(true), true)
-  assert.throws(() => registeredDef.stateSchema.parse('bad'))
+  const initialState = registeredDef.init({}, 0)
+  assert.deepEqual(registeredDef.stateSchema.parse(initialState), initialState)
+  assert.throws(() => registeredDef.stateSchema.parse(true))
 
   const sessionA = { id: 'sess-a' }
   const sessionB = { id: 'sess-b' }
@@ -89,8 +90,9 @@ test('createSessionScope reads and unregisters the rc.1 projection for first tur
   assert.equal(scope.isSessionActivated(sessionB), false)
 
   // Turn 1: agent/inbox/spliced arrives BEFORE tools.resolve()
-  const nextA = registeredDef.apply(false, {
+  const nextA = registeredDef.apply(initialState, {
     type: 'agent/inbox/spliced',
+    seq: 0,
     data: {
       inserted: [{ source: { kind: 'user' }, content: [{ type: 'text', text: '@mail check Widevine' }] }],
     },
@@ -100,21 +102,45 @@ test('createSessionScope reads and unregisters the rc.1 projection for first tur
   assert.equal(scope.isSessionActivated(sessionB), false)
 
   // Assistant message containing @mail does NOT activate sessionB
-  const nextB = registeredDef.apply(false, {
+  const nextB = registeredDef.apply(initialState, {
     type: 'assistant/message',
+    seq: 0,
     data: { content: [{ type: 'text', text: 'Try typing @mail' }] },
   })
   states.set(sessionB, nextB)
   assert.equal(scope.isSessionActivated(sessionB), false)
 
   // Resume/replay via committed user/message activates sessionC
-  const nextC = registeredDef.apply(false, {
+  const nextC = registeredDef.apply(initialState, {
     type: 'user/message',
+    seq: 0,
     data: { source: { kind: 'user' }, content: [{ type: 'text', text: '@mail assistant 汇总待办' }] },
   })
   states.set(sessionC, nextC)
   assert.equal(scope.isSessionActivated(sessionC), true)
 
-  await scope.dispose()
+  const child = { id: 'child' }
+  const fork = { id: 'fork' }
+  const trigger = { source: { kind: 'user' }, content: [{ type: 'text', text: '@mail' }] }
+  const childSeed = registeredDef.init({ origin: 'subagent' }, 0)
+  const delegated = registeredDef.apply(childSeed, {
+    type: 'agent/inbox/spliced', seq: 0, data: { target: 'next-turn', start: 0, inserted: [trigger] },
+  })
+  states.set(child, delegated)
+  assert.equal(scope.isSessionActivated(child), false, 'model-authored initial delegation must not activate a child')
+
+  states.set(child, registeredDef.apply(delegated, {
+    type: 'user/message', seq: 1, data: { ...trigger, source: { kind: 'user', rpcId: 'child-web-prompt' } },
+  }))
+  assert.equal(scope.isSessionActivated(child), true)
+
+  const forkSeed = registeredDef.init({ isSeeded: true }, 4)
+  const inherited = registeredDef.apply(forkSeed, { type: 'user/message', seq: 3, data: trigger })
+  states.set(fork, inherited)
+  assert.equal(scope.isSessionActivated(fork), false, 'a fork must not inherit mail activation')
+  states.set(fork, registeredDef.apply(inherited, { type: 'user/message', seq: 5, data: trigger }))
+  assert.equal(scope.isSessionActivated(fork), true)
+
+  scope.dispose()
   assert.equal(scope.isSessionActivated(sessionA), false)
 })

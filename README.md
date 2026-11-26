@@ -144,6 +144,7 @@ In any DSH conversation, type `@mail` (or pick `@mail` from the `@` composer men
 - `@mail 汇总最近 7 天的邮件，列出我的待办事项`
 
 Subsequent turns in the same session keep `exchange_*` tools enabled; unrelated sessions without `@mail` never see any email tools.
+When you fork a session or open a subagent conversation, type `@mail` in that conversation to grant it access.
 
 ---
 

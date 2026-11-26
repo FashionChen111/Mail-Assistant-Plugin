@@ -396,11 +396,39 @@ test('client.js registers via __ModuleLoader__, uses only react, wires settings.
   // Verify locales
   assert.ok(registeredLocales['dsh-exchange']?.en)
   assert.ok(registeredLocales['dsh-exchange']?.zh)
+  // Manual folder path input was removed: keys and copy must not reference manual addition
+  assert.equal('addFolderPlaceholder' in registeredLocales['dsh-exchange'].en, false)
+  assert.equal('addFolderBtn' in registeredLocales['dsh-exchange'].en, false)
+  assert.equal('addFolderPlaceholder' in registeredLocales['dsh-exchange'].zh, false)
+  assert.equal('addFolderBtn' in registeredLocales['dsh-exchange'].zh, false)
+  assert.doesNotMatch(registeredLocales['dsh-exchange'].en.folderEmpty, /manual/i)
+  assert.doesNotMatch(registeredLocales['dsh-exchange'].zh.folderEmpty, /手动/)
 
   // Verify settings.section, settings.section.icon, and plugins.bundle.config
-  assert.ok(slotRegistrations.some((r) => r.opts.name === 'settings.section' && r.opts.id === 'dsh-exchange'))
+  const settingsReg = slotRegistrations.find((r) => r.opts.name === 'settings.section' && r.opts.id === 'dsh-exchange')
+  assert.ok(settingsReg)
   assert.ok(slotRegistrations.some((r) => r.opts.name === 'settings.section.icon' && r.opts.id === 'dsh-exchange'))
   assert.ok(slotRegistrations.some((r) => r.opts.name === 'plugins.bundle.config' && r.opts.key === '@local/dsh-exchange'))
+
+  // Render ExchangeSettingsPanel tree and verify zero manual folder input or Add button exists
+  const renderedSettings = settingsReg.component({ t: (k) => registeredLocales['dsh-exchange'].zh[k] ?? k })
+  const walkTree = (node, visit) => {
+    if (!node || typeof node !== 'object') return
+    visit(node)
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) walkTree(child, visit)
+    }
+  }
+  const foundManualControls = []
+  walkTree(renderedSettings, (node) => {
+    if (node.type === 'input' && /manual|手动添加|认证项目\/Widevine/i.test(String(node.props?.placeholder ?? ''))) {
+      foundManualControls.push({ type: 'input', placeholder: node.props.placeholder })
+    }
+    if (node.type === 'button' && Array.isArray(node.children) && node.children.some((c) => c === '添加' || c === 'Add' || c === 'addFolderBtn')) {
+      foundManualControls.push({ type: 'button', text: node.children.join('') })
+    }
+  })
+  assert.deepEqual(foundManualControls, [])
 
   // Verify @mail inputTrigger
   assert.ok(registeredTrigger)

@@ -64,10 +64,8 @@ window.__ModuleLoader__.load({
         folderFilterPlaceholder: 'Filter folders...',
         selectAllBtn: 'Select All',
         clearAllBtn: 'Clear All',
-        folderEmpty: 'Click "Connect & Load Folders" to load your Exchange folder tree, or add a folder path manually below.',
+        folderEmpty: 'Click "Connect & Load Folders" above to load your Exchange folder tree.',
         folderFilterEmpty: 'No folders match the current filter.',
-        addFolderPlaceholder: 'Add folder path, e.g. 认证项目/Widevine',
-        addFolderBtn: 'Add',
         badgeAllowed: 'Allowed',
         badgeDenied: 'Blocked',
         badgeInherited: 'Inherited',
@@ -152,10 +150,8 @@ window.__ModuleLoader__.load({
         folderFilterPlaceholder: '筛选文件夹...',
         selectAllBtn: '全选',
         clearAllBtn: '清空',
-        folderEmpty: '点击「连接并加载文件夹」拉取 Exchange 目录树，或在下方手动添加文件夹路径。',
+        folderEmpty: '点击上方「连接并加载文件夹」拉取您的 Exchange 目录树。',
         folderFilterEmpty: '没有匹配当前筛选条件的文件夹。',
-        addFolderPlaceholder: '手动添加路径，例如 认证项目/Widevine',
-        addFolderBtn: '添加',
         badgeAllowed: '允许',
         badgeDenied: '禁止',
         badgeInherited: '受上级继承',
@@ -714,7 +710,6 @@ window.__ModuleLoader__.load({
       const [knownFolders, setKnownFolders] = useState([]);
       const [probedPaths, setProbedPaths] = useState(null);
       const [folderFilter, setFolderFilter] = useState('');
-      const [manualFolder, setManualFolder] = useState('');
       const [emergencyLock, setEmergencyLock] = useState(false);
       const [togglingLock, setTogglingLock] = useState(false);
       const [limits, setLimits] = useState(null);
@@ -1025,17 +1020,6 @@ window.__ModuleLoader__.load({
         } finally {
           setSaving(false);
         }
-      };
-
-      const handleAddManualFolder = () => {
-        const clean = normalizePath(manualFolder);
-        if (!clean) return;
-        const segs = clean.split('/');
-        setKnownFolders((prev) =>
-          prev.some((f) => f.path === clean) ? prev : [...prev, { path: clean, name: segs[segs.length - 1] }],
-        );
-        setSelectedFoldersForMode(mode, (prev) => (prev.includes(clean) ? prev : [...prev, clean]));
-        setManualFolder('');
       };
 
       const handleSelectAllVisible = () => {
@@ -1455,35 +1439,6 @@ window.__ModuleLoader__.load({
                       );
                     }),
                   ),
-            h(
-              'div',
-              { className: 'dsh-ex-inline' },
-              h('input', {
-                className: 'dsh-ex-input',
-                style: { flex: 1 },
-                type: 'text',
-                value: manualFolder,
-                disabled: controlsDisabled,
-                placeholder: t('addFolderPlaceholder'),
-                onChange: (e) => setManualFolder(e.target.value),
-                onKeyDown: (e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddManualFolder();
-                  }
-                },
-              }),
-              h(
-                'button',
-                {
-                  type: 'button',
-                  className: 'dsh-ex-btn',
-                  disabled: controlsDisabled || !manualFolder.trim(),
-                  onClick: handleAddManualFolder,
-                },
-                t('addFolderBtn'),
-              ),
-            ),
           ),
         ),
         limits

@@ -58,13 +58,14 @@ You should see the `# == @local/dsh-exchange` layer with default limits and trig
 
 ### 1. Account & Folder Permissions (Settings UI)
 
-Open **Settings → Mail Assistant** (or **Plugins → Mail Assistant**):
+Open **Mail Assistant** directly from the top-left global sidebar (alongside **Plugins** and **Automation tasks**), or via **Settings → Mail Assistant** / **Plugins → Mail Assistant**:
 
 1. Enter your HTTPS **EWS URL** (e.g. `https://exchange.company.com/EWS/Exchange.asmx`), **Email**, **Domain** (optional if logging in with email), **Username**, and **Password** (or set `DSH_EXCHANGE_PASSWORD` in your environment).
 2. Click **Connect & Load Folders** to test connectivity and fetch your mail folder hierarchy.
 3. Choose **Whitelist** or **Blacklist** mode and check the desired folders. (Checking a parent folder cascades to all its subfolders in the UI so saved paths remain explicit.)
 4. Toggle **Emergency Lock** at any time to immediately block all Agent mailbox access.
-5. Click **Save** — changes persist atomically (`0600`) and take effect on the very next tool call.
+5. Toggle **Show shortcut in top-left global sidebar** under **Navigation Shortcut** in Settings or Plugins to hide or restore the top-left sidebar entry at any time.
+6. Click **Save** — changes persist atomically (`0600`) and take effect on the very next tool call.
 
 ### 2. Tunable Limits (`~/.dsh/profiles/<profile>/cordis.patch.yml`)
 

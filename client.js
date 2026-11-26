@@ -95,6 +95,14 @@ window.__ModuleLoader__.load({
         errGeneric: 'Request failed (HTTP {status}).',
         triggerSection: 'Mail Assistant',
         triggerDescription: 'Activate Exchange email tools for this session (draft-only)',
+        sectionInterface: 'Navigation Shortcut',
+        sidebarShortcutLabel: 'Show shortcut in top-left global sidebar',
+        sidebarShortcutHint: 'Places a one-click Mail Assistant entry alongside Plugins and Automation tasks. You can re-enable it anytime from Settings or Plugins.',
+        sidebarShortcutVisible: 'Visible',
+        sidebarShortcutHidden: 'Hidden',
+        sidebarShortcutShownOk: 'Top-left sidebar shortcut is now visible.',
+        sidebarShortcutHiddenOk: 'Top-left sidebar shortcut hidden. You can re-enable it anytime in Settings or Plugins.',
+        backToChatBtn: '← Back to Chat',
       },
       zh: {
         nav: 'Mail Assistant',
@@ -181,6 +189,14 @@ window.__ModuleLoader__.load({
         errGeneric: '请求失败（HTTP {status}）。',
         triggerSection: 'Mail Assistant',
         triggerDescription: '在本会话按需启用 Exchange 邮箱工具（仅草稿，不发送）',
+        sectionInterface: '快捷入口',
+        sidebarShortcutLabel: '在左上角全局面板显示快捷入口',
+        sidebarShortcutHint: '在左上角「插件 / 自动化任务」区域显示 Mail Assistant 入口，一键直达邮箱配置；关闭后可随时在「设置」或「插件」中重新开启。',
+        sidebarShortcutVisible: '显示中',
+        sidebarShortcutHidden: '已隐藏',
+        sidebarShortcutShownOk: '已在左上角全局面板显示 Mail Assistant 快捷入口。',
+        sidebarShortcutHiddenOk: '已隐藏左上角快捷入口，可随时在「设置」或「插件」中重新开启。',
+        backToChatBtn: '← 返回对话',
       },
     };
 
@@ -483,7 +499,230 @@ window.__ModuleLoader__.load({
         font-size: 11px;
         color: var(--dsw-alias-label-tertiary, #6b7280);
       }
+      .dsh-ex-main-page {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+        background: var(--dsw-alias-bg-base, transparent);
+        color: var(--dsw-alias-label-primary, #111827);
+      }
+      .dsh-ex-main-scroll {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        scrollbar-gutter: stable;
+      }
+      .dsh-ex-main-content {
+        max-width: 780px;
+        margin: 0 auto;
+        padding: calc(var(--dsh-frame-top-clearance, 0px) + 28px) clamp(20px, 4vw, 48px) 48px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .dsh-ex-main-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+      }
+      .dsh-ex-back-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .dsh-ex-switch-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .dsh-ex-switch-info {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        flex: 1;
+        min-width: 0;
+      }
+      .dsh-ex-switch {
+        position: relative;
+        flex-shrink: 0;
+        width: 40px;
+        height: 22px;
+        border-radius: 999px;
+        border: 1px solid var(--dsw-alias-border-l3, rgba(128,128,128,0.35));
+        background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.22));
+        padding: 0;
+        cursor: pointer;
+        transition: background-color 140ms ease, border-color 140ms ease;
+      }
+      .dsh-ex-switch[aria-checked="true"] {
+        background: var(--dsw-alias-state-business-primary, #4176e6);
+        border-color: transparent;
+      }
+      .dsh-ex-switch:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .dsh-ex-switch-thumb {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 999px;
+        background: #ffffff;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+        transition: transform 140ms ease;
+      }
+      .dsh-ex-switch[aria-checked="true"] .dsh-ex-switch-thumb {
+        transform: translateX(18px);
+      }
     `;
+
+    const STORAGE_KEY_SIDEBAR = 'dsh-exchange:showSidebarEntry';
+    const PANEL_ID = SECTION_ID;
+
+    function readStoredSidebarVisibility() {
+      try {
+        if (typeof localStorage !== 'undefined' && localStorage) {
+          const val = localStorage.getItem(STORAGE_KEY_SIDEBAR);
+          if (val === 'false') return false;
+          if (val === 'true') return true;
+        }
+      } catch {
+        // Ignore storage errors in restricted contexts.
+      }
+      return true;
+    }
+
+    function writeStoredSidebarVisibility(visible) {
+      try {
+        if (typeof localStorage !== 'undefined' && localStorage) {
+          localStorage.setItem(STORAGE_KEY_SIDEBAR, visible ? 'true' : 'false');
+        }
+      } catch {
+        // Ignore storage errors in restricted contexts.
+      }
+    }
+
+    function getLayoutService(ctx) {
+      if (!ctx) return undefined;
+      if (typeof ctx.get === 'function') return ctx.get('layout');
+      return ctx.layout;
+    }
+
+    function leaveMainPanelIfActive(ctx) {
+      const layout = getLayoutService(ctx);
+      if (!layout || typeof layout.selectPanel !== 'function') return;
+      const snap = layout.panelInfo && typeof layout.panelInfo.getSnapshot === 'function'
+        ? layout.panelInfo.getSnapshot()
+        : layout.panelInfo;
+      if (snap && snap.activePanelId === PANEL_ID) {
+        layout.selectPanel(null);
+      }
+    }
+
+    function createSidebarVisibilityController(ctx, t, MainPageComponent) {
+      let visible = readStoredSidebarVisibility();
+      let slotDisposers = [];
+      let disposed = false;
+      const listeners = new Set();
+
+      const notify = () => {
+        for (const fn of listeners) {
+          try {
+            fn(visible);
+          } catch {
+            // Isolate listener errors.
+          }
+        }
+      };
+
+      const mountSlots = () => {
+        if (disposed || slotDisposers.length > 0) return;
+        const dMain = ctx.slots.inject('main', () =>
+          ctx.slots.register(
+            {
+              name: 'main',
+              key: PANEL_ID,
+              locale: NS,
+            },
+            MainPageComponent,
+          ),
+        );
+        const dPanel = ctx.slots.inject('sidebar.panellist', () =>
+          ctx.slots.register(
+            {
+              name: 'sidebar.panellist',
+              id: PANEL_ID,
+              order: 20,
+              label: () => t('nav'),
+              locale: NS,
+            },
+            MailSvgIcon,
+          ),
+        );
+        if (typeof dMain === 'function') slotDisposers.push(dMain);
+        if (typeof dPanel === 'function') slotDisposers.push(dPanel);
+      };
+
+      const unmountSlots = () => {
+        leaveMainPanelIfActive(ctx);
+        for (const dispose of slotDisposers.splice(0)) {
+          try {
+            dispose();
+          } catch {
+            // Ignore disposal errors.
+          }
+        }
+      };
+
+      const setVisible = (next, opts) => {
+        const boolNext = Boolean(next);
+        if (!opts || opts.persistLocal !== false) {
+          writeStoredSidebarVisibility(boolNext);
+        }
+        visible = boolNext;
+        if (visible) mountSlots();
+        else unmountSlots();
+        notify();
+      };
+
+      const syncFromServer = (data) => {
+        if (data && data.ui && typeof data.ui.showSidebarEntry === 'boolean') {
+          setVisible(data.ui.showSidebarEntry);
+        }
+      };
+
+      if (visible) {
+        mountSlots();
+      }
+
+      return {
+        getSnapshot() {
+          return visible;
+        },
+        subscribe(listener) {
+          listeners.add(listener);
+          return () => {
+            listeners.delete(listener);
+          };
+        },
+        setVisible,
+        syncFromServer,
+        dispose() {
+          disposed = true;
+          unmountSlots();
+          listeners.clear();
+        },
+      };
+    }
+
+    let activeSidebarController = null;
 
     function normalizePath(p) {
       return String(p || '')
@@ -712,6 +951,10 @@ window.__ModuleLoader__.load({
       const [folderFilter, setFolderFilter] = useState('');
       const [emergencyLock, setEmergencyLock] = useState(false);
       const [togglingLock, setTogglingLock] = useState(false);
+      const [showSidebarEntry, setShowSidebarEntry] = useState(() =>
+        activeSidebarController ? activeSidebarController.getSnapshot() : readStoredSidebarVisibility(),
+      );
+      const [togglingSidebar, setTogglingSidebar] = useState(false);
       const [limits, setLimits] = useState(null);
 
       const [savedSnapshot, setSavedSnapshot] = useState('');
@@ -773,6 +1016,13 @@ window.__ModuleLoader__.load({
             return Array.from(byPath.values());
           });
           setEmergencyLock(Boolean(data.access?.emergencyLock));
+          if (activeSidebarController) {
+            activeSidebarController.syncFromServer(data);
+            setShowSidebarEntry(activeSidebarController.getSnapshot());
+          } else if (typeof data.ui?.showSidebarEntry === 'boolean') {
+            setShowSidebarEntry(data.ui.showSidebarEntry);
+            writeStoredSidebarVisibility(data.ui.showSidebarEntry);
+          }
           setLimits(data.limits || null);
           setSavedSnapshot(
             makeFormSnapshot({
@@ -795,6 +1045,14 @@ window.__ModuleLoader__.load({
       useEffect(() => {
         void loadStatus();
       }, [loadStatus]);
+
+      useEffect(() => {
+        if (!activeSidebarController) return undefined;
+        setShowSidebarEntry(activeSidebarController.getSnapshot());
+        return activeSidebarController.subscribe((next) => {
+          setShowSidebarEntry(next);
+        });
+      }, []);
 
       const urlErrorKey = useMemo(() => validateClientServerUrl(serverUrl), [serverUrl]);
 
@@ -841,6 +1099,47 @@ window.__ModuleLoader__.load({
           ? t('policySummaryWhitelist', { allowed: String(allowed), blocked: String(blocked) })
           : t('policySummaryBlacklist', { blocked: String(blocked), allowed: String(allowed) });
       }, [emergencyLock, allKnownPaths, mode, selectedSet, t]);
+
+      const handleToggleSidebarShortcut = async () => {
+        if (controlsDisabled || togglingSidebar) return;
+        const prev = showSidebarEntry;
+        const next = !prev;
+        setTogglingSidebar(true);
+        setFeedback(null);
+        setShowSidebarEntry(next);
+        if (activeSidebarController) {
+          activeSidebarController.setVisible(next);
+        } else {
+          writeStoredSidebarVisibility(next);
+        }
+        try {
+          const resp = await fetch('dsh-exchange/api/save', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ ui: { showSidebarEntry: next } }),
+          });
+          const data = await readJsonSafely(resp);
+          if (!resp.ok || !data.ok) {
+            setShowSidebarEntry(prev);
+            if (activeSidebarController) activeSidebarController.setVisible(prev);
+            else writeStoredSidebarVisibility(prev);
+            setFeedback({ scope: 'bottom', tone: 'err', text: formatApiError(data, resp.status, t) });
+            return;
+          }
+          setFeedback({
+            scope: 'bottom',
+            tone: 'ok',
+            text: next ? t('sidebarShortcutShownOk') : t('sidebarShortcutHiddenOk'),
+          });
+        } catch (err) {
+          setShowSidebarEntry(prev);
+          if (activeSidebarController) activeSidebarController.setVisible(prev);
+          else writeStoredSidebarVisibility(prev);
+          setFeedback({ scope: 'bottom', tone: 'err', text: err?.message || String(err) });
+        } finally {
+          setTogglingSidebar(false);
+        }
+      };
 
       const handleToggleEmergencyLock = async () => {
         if (controlsDisabled || togglingLock) return;
@@ -1441,6 +1740,44 @@ window.__ModuleLoader__.load({
                   ),
           ),
         ),
+        // Left Sidebar Shortcut visibility toggle (instant sync across Settings, Plugins, and Sidebar Main Page)
+        h(
+          'section',
+          { className: 'dsh-ex-card' },
+          h(
+            'div',
+            { className: 'dsh-ex-switch-row' },
+            h(
+              'div',
+              { className: 'dsh-ex-switch-info' },
+              h(
+                'div',
+                { className: 'dsh-ex-inline' },
+                h('h3', { className: 'dsh-ex-card-title' }, t('sectionInterface')),
+                h(
+                  'span',
+                  { className: `dsh-ex-pill ${showSidebarEntry ? 'dsh-ex-pill-allow' : 'dsh-ex-pill-neutral'}` },
+                  showSidebarEntry ? t('sidebarShortcutVisible') : t('sidebarShortcutHidden'),
+                ),
+              ),
+              h('span', { className: 'dsh-ex-label' }, t('sidebarShortcutLabel')),
+              h('span', { className: 'dsh-ex-hint' }, t('sidebarShortcutHint')),
+            ),
+            h(
+              'button',
+              {
+                type: 'button',
+                role: 'switch',
+                'aria-checked': showSidebarEntry,
+                'aria-label': t('sidebarShortcutLabel'),
+                className: 'dsh-ex-switch',
+                disabled: controlsDisabled || togglingSidebar,
+                onClick: handleToggleSidebarShortcut,
+              },
+              h('span', { className: 'dsh-ex-switch-thumb', 'aria-hidden': true }),
+            ),
+          ),
+        ),
         limits
           ? h(
               'div',
@@ -1550,12 +1887,72 @@ window.__ModuleLoader__.load({
       __validateClientServerUrl: validateClientServerUrl,
       __formatApiError: formatApiError,
       __matchesMailTrigger: matchesMailTrigger,
+      __getSidebarController() {
+        return activeSidebarController;
+      },
       apply(ctx) {
         ctx.effect(
           () => ctx.locale.register(NS, DICTIONARIES),
           'dsh-exchange: runtime locale dictionaries',
         );
         const t = ctx.locale.bind(NS);
+
+        function MailAssistantMainPage(props) {
+          const translate = (props && props.t) || t;
+          return h(
+            'div',
+            { className: 'dsh-ex-main-page', 'data-testid': 'dsh-exchange-main-page' },
+            h('style', null, STYLES),
+            h(
+              'div',
+              { className: 'dsh-ex-main-scroll' },
+              h(
+                'div',
+                { className: 'dsh-ex-main-content' },
+                h(
+                  'div',
+                  { className: 'dsh-ex-main-topbar' },
+                  h(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'dsh-ex-btn dsh-ex-back-btn',
+                      onClick: () => {
+                        const layout = getLayoutService(ctx);
+                        if (layout && typeof layout.selectPanel === 'function') {
+                          layout.selectPanel(null);
+                        }
+                      },
+                    },
+                    translate('backToChatBtn'),
+                  ),
+                ),
+                h(ExchangeSettingsPanel, { ...props, t: translate, hideHeader: false }),
+              ),
+            ),
+          );
+        }
+
+        const sidebarController = createSidebarVisibilityController(ctx, t, MailAssistantMainPage);
+        activeSidebarController = sidebarController;
+        ctx.effect(() => {
+          if (typeof fetch === 'function') {
+            void fetch('dsh-exchange/api/status', { method: 'GET' })
+              .then((resp) => (resp && resp.ok ? readJsonSafely(resp) : null))
+              .then((data) => {
+                if (data && data.ok) {
+                  sidebarController.syncFromServer(data);
+                }
+              })
+              .catch(() => {});
+          }
+          return () => {
+            sidebarController.dispose();
+            if (activeSidebarController === sidebarController) {
+              activeSidebarController = null;
+            }
+          };
+        }, 'dsh-exchange: top-left sidebar shortcut lifecycle');
 
         ctx.slots.inject('settings.section', () =>
           ctx.slots.register(

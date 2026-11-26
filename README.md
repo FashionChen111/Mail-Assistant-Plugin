@@ -1,8 +1,38 @@
+<div align="center">
+
+<img src="./icon.svg" width="60" height="60" alt="Mail Assistant Logo" />
+
 # Mail Assistant (`@local/dsh-exchange`)
 
-Microsoft Exchange (EWS + NTLM) enterprise email plugin bundle for **DeepSeek Harness (DSH) `>=0.2.2-rc.3 <0.3.0`**.
+**Draft-only, privacy-first Microsoft Exchange (EWS + NTLM) plugin bundle for DeepSeek Harness (`>=0.2.2-rc.3 <0.3.0`)**
 
-Designed for certification project management workflows (Widevine, AirPlay2, DTS, Dolby, etc.): folder-scoped email search and reading, conversation thread reconstruction, heuristic Jira notification & todo extraction, certification project summarization, and **draft-only** email composition triggered on demand via `@mail`.
+**English** | [简体中文](./README.zh-CN.md)
+
+[![Release](https://img.shields.io/github/v/release/FashionChen111/Mail-Assistant-Plugin?style=flat-square&logo=github&color=4176e6&label=Release)](https://github.com/FashionChen111/Mail-Assistant-Plugin/releases)
+[![DeepSeek Harness](https://img.shields.io/badge/DeepSeek_Harness-%3E%3D0.2.2--rc.3-2563eb?style=flat-square)](#requirements)
+[![Node.js](https://img.shields.io/badge/Node.js-%5E22.19_%7C%7C_%3E%3D24-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![Exchange](https://img.shields.io/badge/Exchange-EWS_%2B_NTLM-0078d4?style=flat-square)](#requirements)
+
+[![Safety](https://img.shields.io/badge/Safety-Draft--Only_%C2%B7_Zero_Send-16a34a?style=flat-square)](#safety--privacy-guarantees)
+[![Delete Guard](https://img.shields.io/badge/Delete-Recoverable_Only-d97706?style=flat-square)](#safety--privacy-guarantees)
+[![Privacy](https://img.shields.io/badge/Privacy-Folder_ACL_%C2%B7_Local_0600-4f46e5?style=flat-square)](#safety--privacy-guarantees)
+[![Trigger](https://img.shields.io/badge/Trigger-%40mail_On--Demand-7c3aed?style=flat-square)](#usage)
+[![Tools](https://img.shields.io/badge/Tools-15_EWS_Actions-0ea5e9?style=flat-square)](#tool-reference-15-tools)
+
+</div>
+
+---
+
+Designed for enterprise and certification project management workflows (Widevine, AirPlay2, DTS, Dolby, etc.): folder-scoped email search and reading, conversation thread reconstruction, heuristic Jira notification & todo extraction, certification project summarization, transparent **Agent Activity History**, and **draft-only** email composition triggered on demand via `@mail`.
+
+---
+
+## Highlights
+
+- **One-Click Global Sidebar Access:** Dedicated **Mail Assistant** entry in DSH's top-left global navigation rail (alongside **Plugins** and **Automation tasks**), toggleable anytime from Settings, Plugins, or the Mail Assistant page itself.
+- **Agent Activity History Tab:** Review every email the Agent read (subject, sender, folder), every draft it created or updated (subject, recipients, char count), searches, analyses, and blocked (`PERM_001`) attempts—with KPI counters, category filter chips, keyword search, and 2-step Clear History.
+- **Zero-Send & Zero-Permanent-Delete Safety:** Structurally impossible for the Agent to send emails or permanently delete messages.
+- **Live Folder ACL & Emergency Lock:** Fine-grained whitelist/blacklist folder permissions and a top-pinned one-click **Emergency Access Lock** that takes effect immediately without restarting DSH.
 
 ---
 
@@ -14,7 +44,9 @@ Designed for certification project management workflows (Widevine, AirPlay2, DTS
 - **Folder-level access control:** Supports `whitelist` (exact path match, no implicit inheritance) and `blacklist` (path + all subfolders denied), plus an instant **Emergency Lock** switch. `state.json` (`0600`, atomic writes) is read fresh on every tool call so policy updates take effect immediately without restarting DSH.
 - **Credential isolation:** Passwords are stored exclusively in DSH's host credential service (`ctx.credentials` → `$DSH_HOME/.credentials.yaml`, mode `0600`) or supplied via the `DSH_EXCHANGE_PASSWORD` environment variable. Passwords are never written to `state.json`, config files, logs, or API responses.
 - **Strict HTTPS:** Plain `http://` EWS endpoints are rejected at both save time and connect time (`NET_001`).
-- **Redacted audit log:** Every tool invocation appends a single JSONL record to `$DSH_HOME/dsh-exchange/audit.jsonl` (`0600`) containing only metadata (`ts`, `action`, `folder`, `emailId`, `outcome`, `code`, `count`, `elapsedMs`)—never subjects, bodies, or credentials.
+- **Dual-layer local logging (`0600`):**
+  - **Security Audit Log (`$DSH_HOME/dsh-exchange/audit.jsonl`, append-only, `0600`):** Strictly metadata-only (`ts`, `action`, `folder`, `emailId`, `outcome`, `code`, `count`, `elapsedMs`)—never subjects, bodies, or credentials, and never modified when clearing UI history.
+  - **Agent Activity History (`$DSH_HOME/dsh-exchange/activity.jsonl`, rolling cap 500, `0600`):** Stores human-readable safe summaries (email/draft subjects, senders/recipients, search queries, Jira keys, attachment filenames) for the in-app **Activity History** tab, while strictly stripping passwords, email bodies (`body_text`/`body_html`), and raw attachment payloads (`content_base64`). Denied `read_email` calls never record forbidden email subjects or senders.
 - **Attachment cap & path safety:** Attachments strictly capped at **25 MiB** (`26,214,400` bytes) checked before download and before disk write (`ATT_001`). Filenames are sanitized to safe basenames.
 
 ---
@@ -29,20 +61,24 @@ Designed for certification project management workflows (Widevine, AirPlay2, DTS
 
 ## Installation
 
-### From Local Directory
+### Option 1: From GitHub Release Tarball (Recommended)
+
+Download `local-dsh-exchange-1.4.0.tgz` from the [GitHub Releases](https://github.com/FashionChen111/Mail-Assistant-Plugin/releases) page, then run:
 
 ```bash
-dsh plugin --profile <your-profile> add /path/to/Mail-Assistant-Plugin
+dsh plugin --profile <your-profile> add ./local-dsh-exchange-1.4.0.tgz
 ```
 
-Or in the DSH Web UI: open **Plugins → Add plugin** and select the local directory of this package.
-
-### From Packed Tarball
+### Option 2: From Local Source Directory
 
 ```bash
-npm pack
-dsh plugin --profile <your-profile> add ./local-dsh-exchange-1.1.0.tgz
+git clone https://github.com/FashionChen111/Mail-Assistant-Plugin.git
+cd Mail-Assistant-Plugin
+npm install
+dsh plugin --profile <your-profile> add "$(pwd)"
 ```
+
+Or in the DSH Web UI: open **Plugins → Add plugin** and select the local directory or `.tgz` package.
 
 ### Verify Composition
 
@@ -54,20 +90,29 @@ You should see the `# == @local/dsh-exchange` layer with default limits and trig
 
 ---
 
-## Configuration
+## Configuration & Activity History UI
 
-### 1. Account & Folder Permissions (Settings UI)
+Open **Mail Assistant** directly from the top-left global sidebar (alongside **Plugins** and **Automation tasks**), or via **Settings → Mail Assistant** / **Plugins → Mail Assistant**.
 
-Open **Mail Assistant** directly from the top-left global sidebar (alongside **Plugins** and **Automation tasks**), or via **Settings → Mail Assistant** / **Plugins → Mail Assistant**:
+### 1. Configuration Tab (`Configuration`)
 
-1. Enter your HTTPS **EWS URL** (e.g. `https://exchange.company.com/EWS/Exchange.asmx`), **Email**, **Domain** (optional if logging in with email), **Username**, and **Password** (or set `DSH_EXCHANGE_PASSWORD` in your environment).
-2. Click **Connect & Load Folders** to test connectivity and fetch your mail folder hierarchy.
-3. Choose **Whitelist** or **Blacklist** mode and check the desired folders. (Checking a parent folder cascades to all its subfolders in the UI so saved paths remain explicit.)
-4. Toggle **Emergency Lock** at any time to immediately block all Agent mailbox access.
-5. Toggle **Show shortcut in top-left global sidebar** under **Navigation Shortcut** in Settings or Plugins to hide or restore the top-left sidebar entry at any time.
-6. Click **Save** — changes persist atomically (`0600`) and take effect on the very next tool call.
+1. **Emergency Access Lock (pinned at top):** One-click instant lock/unlock across all tabs—blocks every Exchange tool immediately with `PERM_001`.
+2. **Exchange Connection:** Enter your HTTPS **EWS URL** (e.g. `https://exchange.company.com/EWS/Exchange.asmx`), **Email**, **Domain** (optional if logging in with email), **Username**, and **Password** (or set `DSH_EXCHANGE_PASSWORD` in your environment).
+3. **Connect & Load Folders:** Tests connectivity and loads your full Exchange mail folder hierarchy.
+4. **Folder Access Policy:** Choose **Whitelist** or **Blacklist** mode and select folders. Checking a parent folder cascades to all subfolders in the UI so saved paths remain explicit.
+5. **Navigation Shortcut:** Toggle **Show shortcut in top-left global sidebar** to hide or restore the top-left global entry at any time.
+6. **Save:** Persists atomically (`0600`) and takes effect on the very next tool call.
 
-### 2. Tunable Limits (`~/.dsh/profiles/<profile>/cordis.patch.yml`)
+### 2. Agent Activity History Tab (`Activity History`)
+
+Switch to the **Activity History** tab on any Mail Assistant entry point to inspect what the Agent has done:
+
+- **KPI Summary Strip:** Total actions, Emails Read, Drafts saved/updated, and Blocked/Failed attempts.
+- **Filters & Search:** Filter by category (`All`, `Read`, `Drafts`, `Search`, `Analysis`, `Organize`, `Blocked`) or search by subject, sender, folder, project keyword, or Jira key.
+- **Legacy Compatibility:** Automatically displays pre-existing `audit.jsonl` entries alongside rich `activity.jsonl` summaries.
+- **2-Step Clear History:** Clears visible UI history cleanly using a `clearedAt` watermark while keeping the underlying `audit.jsonl` security audit log completely intact on disk.
+
+### 3. Tunable Limits (`~/.dsh/profiles/<profile>/cordis.patch.yml`)
 
 ```yaml
 - insert:
@@ -87,7 +132,7 @@ Open **Mail Assistant** directly from the top-left global sidebar (alongside **P
 
 ## Usage
 
-In any DSH conversation, type `@mail` (or select `@mail` from the `@` composer menu):
+In any DSH conversation, type `@mail` (or pick `@mail` from the `@` composer menu):
 
 - `@mail 看下最近 Widevine 的邮件，support 三天没回，帮我起草一封温柔客气的提醒草稿`
 - `@mail 看下最近 AirPlay2 周期情况的邮件，汇总当前项目的计划排期`

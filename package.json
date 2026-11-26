@@ -25,7 +25,8 @@
     "icon.svg",
     "locale/*.json",
     "src/**/*.js",
-    "README.md"
+    "README.md",
+    "README.zh-CN.md"
   ],
   "scripts": {
     "test": "node --test tests/unit/*.test.js",

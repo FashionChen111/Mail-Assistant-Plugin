@@ -36,3 +36,17 @@ test('locale/en.json, locale/zh.json, cordis.patch.yml, and icon.svg satisfy DSH
   assert.match(iconBuf, /viewBox="0 0 36 36"/)
   assert.doesNotMatch(iconBuf, /<script|<style|<text|<image|foreignObject/i)
 })
+
+test('README.md and README.zh-CN.md cross-link with Shields.io badges and are packaged in package.json files', async () => {
+  const pkg = JSON.parse(await readFile(resolve(ROOT, 'package.json'), 'utf8'))
+  assert.ok(Array.isArray(pkg.files) && pkg.files.includes('README.md') && pkg.files.includes('README.zh-CN.md'))
+
+  const enReadme = await readFile(resolve(ROOT, 'README.md'), 'utf8')
+  const zhReadme = await readFile(resolve(ROOT, 'README.zh-CN.md'), 'utf8')
+  assert.match(enReadme, /README\.zh-CN\.md/)
+  assert.match(enReadme, /img\.shields\.io/)
+  assert.match(enReadme, /Activity History/i)
+  assert.match(zhReadme, /README\.md/)
+  assert.match(zhReadme, /img\.shields\.io/)
+  assert.match(zhReadme, /操作历史/)
+})

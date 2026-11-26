@@ -497,7 +497,7 @@ test('HTTP history routes serve merged activity/audit records with filtering and
   }
 })
 
-test('client.js registers via __ModuleLoader__, uses only react, wires settings.section, icon, bundle config, and @mail trigger', async () => {
+test('client.js registers the rc.1 web slots and @mail trigger via __ModuleLoader__', async () => {
   const clientCode = await readFile(resolve(import.meta.dirname, '../../client.js'), 'utf8')
   let loaded = null
   const sandbox = {
@@ -537,6 +537,7 @@ test('client.js registers via __ModuleLoader__, uses only react, wires settings.
   assert.ok(plugin.inject.includes('locale'))
 
   const slotRegistrations = []
+  const rc1Slots = new Set(['main', 'sidebar.panellist', 'settings.section', 'plugins.bundle.config'])
   let registeredTrigger = null
   const registeredLocales = {}
 
@@ -546,7 +547,11 @@ test('client.js registers via __ModuleLoader__, uses only react, wires settings.
       bind(ns) { return (key) => registeredLocales[ns]?.en?.[key] ?? key },
     },
     slots: {
-      inject(_name, cb) { cb(); return () => {} },
+      inject(name, cb) {
+        assert.ok(rc1Slots.has(name), `Slot ${name} is absent in DSH 0.2.0-rc.1`)
+        cb()
+        return () => {}
+      },
       register(opts, component) { slotRegistrations.push({ opts, component }); return () => {} },
     },
     inputTriggers: {
@@ -572,10 +577,9 @@ test('client.js registers via __ModuleLoader__, uses only react, wires settings.
   assert.doesNotMatch(registeredLocales['dsh-exchange'].en.folderEmpty, /manual/i)
   assert.doesNotMatch(registeredLocales['dsh-exchange'].zh.folderEmpty, /手动/)
 
-  // Verify settings.section, settings.section.icon, and plugins.bundle.config
+  // Verify settings and bundle details each expose the controls.
   const settingsReg = slotRegistrations.find((r) => r.opts.name === 'settings.section' && r.opts.id === 'dsh-exchange')
   assert.ok(settingsReg)
-  assert.ok(slotRegistrations.some((r) => r.opts.name === 'settings.section.icon' && r.opts.id === 'dsh-exchange'))
   assert.ok(slotRegistrations.some((r) => r.opts.name === 'plugins.bundle.config' && r.opts.key === '@local/dsh-exchange'))
 
   // Render ExchangeSettingsPanel tree and verify zero manual folder input or Add button exists

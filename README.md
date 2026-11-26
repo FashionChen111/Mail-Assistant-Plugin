@@ -4,12 +4,11 @@
 
 # Mail Assistant (`@local/dsh-exchange`)
 
-**Draft-only, privacy-first Microsoft Exchange (EWS + NTLM) plugin bundle for DeepSeek Harness (`>=0.2.2-rc.3 <0.3.0`)**
+**Draft-only, privacy-first Microsoft Exchange (EWS + NTLM) plugin bundle for DeepSeek Harness `0.2.0-rc.1`**
 
 **English** | [简体中文](./README.zh-CN.md)
 
-[![Release](https://img.shields.io/github/v/release/FashionChen111/Mail-Assistant-Plugin?style=flat-square&logo=github&color=4176e6&label=Release)](https://github.com/FashionChen111/Mail-Assistant-Plugin/releases)
-[![DeepSeek Harness](https://img.shields.io/badge/DeepSeek_Harness-%3E%3D0.2.2--rc.3-2563eb?style=flat-square)](#requirements)
+[![DeepSeek Harness](https://img.shields.io/badge/DeepSeek_Harness-0.2.0--rc.1-2563eb?style=flat-square)](#requirements)
 [![Node.js](https://img.shields.io/badge/Node.js-%5E22.19_%7C%7C_%3E%3D24-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Exchange](https://img.shields.io/badge/Exchange-EWS_%2B_NTLM-0078d4?style=flat-square)](#requirements)
 
@@ -53,7 +52,7 @@ Designed for enterprise and certification project management workflows (Widevine
 
 ## Requirements
 
-- **DSH Harness:** `>=0.2.2-rc.3 <0.3.0`
+- **DSH Harness:** `0.2.0-rc.1`
 - **Node.js:** `^22.19.0 || >=24`
 - **Exchange Server:** On-premises Microsoft Exchange Server with HTTPS EWS + NTLM authentication (verified against Exchange Server SE 15.2.2562.49; EWS negotiated as Exchange 2013 for compatibility with 2013/2016/2019/SE). Microsoft 365 / OAuth2 is out of scope.
 
@@ -61,29 +60,34 @@ Designed for enterprise and certification project management workflows (Widevine
 
 ## Installation
 
-### Option 1: From GitHub Release Tarball (Recommended)
+Use a Web profile for the settings and activity history pages. The examples use the built-in `web` profile. CLI installation requires `pnpm` on `PATH`.
 
-Download `local-dsh-exchange-1.4.0.tgz` from the [GitHub Releases](https://github.com/FashionChen111/Mail-Assistant-Plugin/releases) page, then run:
-
-```bash
-dsh plugin --profile <your-profile> add ./local-dsh-exchange-1.4.0.tgz
-```
-
-### Option 2: From Local Source Directory
+Check out the `0.2.0-rc1` branch in your local clone and restore its locked dependencies.
 
 ```bash
-git clone https://github.com/FashionChen111/Mail-Assistant-Plugin.git
-cd Mail-Assistant-Plugin
-npm install
-dsh plugin --profile <your-profile> add "$(pwd)"
+git switch 0.2.0-rc1
+npm ci
 ```
 
-Or in the DSH Web UI: open **Plugins → Add plugin** and select the local directory or `.tgz` package.
+### Option 1: Pack and Install
+
+```bash
+npm pack
+dsh plugin --profile web add ./local-dsh-exchange-1.4.0.tgz
+```
+
+### Option 2: Link the Local Source Directory
+
+```bash
+dsh plugin --profile web add "$(pwd)"
+```
+
+In DSH Web, **Plugins → Add plugin** also accepts a local directory or `.tgz` package.
 
 ### Verify Composition
 
 ```bash
-dsh --profile <your-profile> --dump-config
+dsh --profile web --dump-config
 ```
 
 You should see the `# == @local/dsh-exchange` layer with default limits and trigger configuration.
@@ -182,7 +186,7 @@ Subsequent turns in the same session keep `exchange_*` tools enabled; unrelated 
 
 ```bash
 # Install dependencies
-npm install
+npm ci
 
 # Run full unit test suite (node --test)
 npm test

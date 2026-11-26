@@ -3060,16 +3060,6 @@ window.__ModuleLoader__.load({
           ),
         );
 
-        ctx.slots.inject('settings.section.icon', () =>
-          ctx.slots.register(
-            {
-              name: 'settings.section.icon',
-              id: SECTION_ID,
-            },
-            MailSvgIcon,
-          ),
-        );
-
         ctx.slots.inject('plugins.bundle.config', () =>
           ctx.slots.register(
             {

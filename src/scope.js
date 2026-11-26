@@ -24,58 +24,25 @@ function eventActivatesMail(event, explicitPrefix) {
   return false
 }
 
-export async function createSessionScope(ctx, { explicitPrefix = '@mail' } = {}) {
-  const projections = typeof ctx?.get === 'function'
-    ? ctx.get('sessionProjections')
-    : ctx?.sessionProjections
-
-  if (projections && typeof projections.register === 'function') {
-    const handle = await projections.register({
-      key: PROJECTION_KEY,
-      stateVersion: 1,
-      stateSchema: booleanStateSchema,
-      init: () => false,
-      apply(activated, event) {
-        if (activated) return activated
-        return eventActivatesMail(event, explicitPrefix) ? true : activated
-      },
-    })
-
-    return {
-      isSessionActivated(session) {
-        if (!session) return false
-        try {
-          return handle.stateOf(session) === true
-        } catch {
-          return false
-        }
-      },
-      async dispose() {
-        if (typeof handle.dispose === 'function') {
-          await handle.dispose()
-        }
-      },
-    }
-  }
-
-  // Fallback for minimal test harnesses without sessionProjections.
-  const activatedSessions = new WeakSet()
-  const off = typeof ctx?.on === 'function'
-    ? ctx.on('session/event', (session, event) => {
-        if (!session || activatedSessions.has(session)) return
-        if (eventActivatesMail(event, explicitPrefix)) {
-          activatedSessions.add(session)
-        }
-      })
-    : undefined
+export function createSessionScope(ctx, { explicitPrefix = '@mail' } = {}) {
+  const projections = ctx.sessionProjections
+  const dispose = projections.register({
+    key: PROJECTION_KEY,
+    stateVersion: 1,
+    stateSchema: booleanStateSchema,
+    init: () => false,
+    apply: (activated, event) => activated || eventActivatesMail(event, explicitPrefix),
+  })
 
   return {
     isSessionActivated(session) {
       if (!session) return false
-      return activatedSessions.has(session)
+      try {
+        return projections.stateOf(session, PROJECTION_KEY) === true
+      } catch {
+        return false
+      }
     },
-    async dispose() {
-      if (typeof off === 'function') off()
-    },
+    dispose,
   }
 }

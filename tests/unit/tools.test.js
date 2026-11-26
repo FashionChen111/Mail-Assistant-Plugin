@@ -331,55 +331,89 @@ test('createExchangeTools defines all 15 tools with valid DSH defineTool schemas
   }
 })
 
-test('registerExchangeTools gates all 15 tools and systemPrompt section behind @mail session scope', async () => {
-  const registeredTools = []
-  let registeredPrompt = null
+test('rc.1 restricts inactive agents, activates on a session event, and releases registrations', () => {
+  const registeredTools = new Set()
+  const listeners = new Map()
+  const agents = new Map()
+  const guards = new Set()
+  const prompts = new Set()
   const mockCtx = {
+    agents: {
+      list: () => [...agents.values()],
+      get: (id) => agents.get(id),
+    },
     tools: {
-      register(def, opts) {
-        registeredTools.push({ def, opts })
-        return () => {}
+      register(def) {
+        registeredTools.add(def.name)
+        return () => registeredTools.delete(def.name)
+      },
+      guard(fn) {
+        guards.add(fn)
+        return () => guards.delete(fn)
       },
     },
     systemPrompt: {
       section(sec) {
-        registeredPrompt = sec
-        return () => {}
+        prompts.add(sec)
+        return () => prompts.delete(sec)
       },
     },
-    effect(fn) {
-      const dispose = fn()
-      return () => { if (typeof dispose === 'function') dispose() }
+    on(event, listener) {
+      listeners.set(event, listener)
+      return () => listeners.delete(event)
     },
   }
-
-  const activeSession = { id: 'active' }
-  const inactiveSession = { id: 'inactive' }
-  const scope = {
-    isSessionActivated(s) { return s === activeSession },
+  const makeAgent = (id, activated = false) => {
+    const denied = new Set()
+    const agent = {
+      session: { id, activated },
+      ctx: { tools: { restrict({ deny }) {
+        for (const name of deny) denied.add(name)
+        return () => denied.clear()
+      } } },
+      visible: () => [...registeredTools].filter((name) => !denied.has(name)),
+    }
+    agents.set(id, agent)
+    return agent
   }
-
-  registerExchangeTools(mockCtx, {
-    tools: createExchangeTools({
-      ctx: mockCtx,
-      config: { maxSearchResults: 100, maxAttachmentMb: 25, maxAttachmentBytes: 25 * 1024 * 1024, maxBodyChars: 20000, requestTimeoutSeconds: 30, requestTimeoutMs: 30000, explicitPrefix: '@mail', dataDir: '/tmp' },
-      statePath: '/tmp/nonexistent.json',
-      auditPath: '/tmp/nonexistent-audit.jsonl',
-      clientFactory: makeFakeEwsClient,
-      getPasswordFn: async () => 'x',
-    }),
+  const live = makeAgent('live')
+  const resumed = makeAgent('resumed', true)
+  const scope = { isSessionActivated: (session) => session?.activated === true }
+  const dispose = registerExchangeTools(mockCtx, {
+    tools: EXPECTED_15_TOOLS.map((name) => ({ name })),
     scope,
   })
 
-  assert.equal(registeredTools.length, 15)
-  for (const { opts } of registeredTools) {
-    assert.equal(opts.when({ agent: { session: inactiveSession } }), false)
-    assert.equal(opts.when({ agent: { session: activeSession } }), true)
-  }
+  const fresh = makeAgent('fresh')
+  listeners.get('agent/created')({ agent: fresh })
+  assert.deepEqual(live.visible(), [])
+  assert.deepEqual(fresh.visible(), [])
+  assert.deepEqual(resumed.visible(), EXPECTED_15_TOOLS)
 
-  assert.ok(registeredPrompt)
-  assert.equal(registeredPrompt.text({ agent: { session: inactiveSession } }), '')
-  assert.match(registeredPrompt.text({ agent: { session: activeSession } }), /exchange_save_draft/)
+  const [guard] = guards
+  const [prompt] = prompts
+  const name = 'exchange_save_draft'
+  assert.equal(typeof guard({ name }), 'string')
+  assert.equal(typeof guard({ name, agent: live }), 'string')
+  assert.equal(guard({ name: 'read_file' }), undefined)
+  assert.equal(prompt.text({ agent: live }), '')
+
+  live.session.activated = true
+  const splice = { type: 'agent/inbox/spliced' }
+  listeners.get('session/event')({ ...live.session }, splice)
+  assert.deepEqual(live.visible(), [])
+  listeners.get('session/event')(live.session, splice)
+  assert.deepEqual(live.visible(), EXPECTED_15_TOOLS)
+  assert.deepEqual(fresh.visible(), [])
+  assert.equal(guard({ name, agent: live }), undefined)
+  assert.match(prompt.text({ agent: live }), /exchange_save_draft/)
+
+  listeners.get('agent/disposed')({ agent: fresh })
+  dispose()
+  assert.deepEqual(live.visible(), [])
+  assert.equal(guards.size, 0)
+  assert.equal(prompts.size, 0)
+  assert.equal(listeners.size, 0)
 })
 
 test('exchange_extract_todos honors include_unread/include_important combinations and exchange_summarize_project handles float days & PERM_001 fallback', async () => {
@@ -577,15 +611,18 @@ test('index.js does not require credentials at top-level so dsh-headless can act
   assert.ok(Array.isArray(entry.inject))
   assert.ok(!entry.inject.includes('credentials'), 'top-level inject must not require credentials for headless compatibility')
   assert.ok(entry.inject.includes('tools'))
+  assert.ok(entry.inject.includes('agents'))
   assert.ok(entry.inject.includes('sessionProjections'))
   assert.ok(entry.inject.includes('systemPrompt'))
 
   // Apply on a headless-like context without credentials or webServer
   const registered = []
   const headlessCtx = {
-    tools: { register(def) { registered.push(def.name); return () => {} } },
-    sessionProjections: { register() { return { get() { return { activated: false } }, dispose() {} } } },
+    agents: { list: () => [] },
+    tools: { register(def) { registered.push(def.name); return () => {} }, guard() { return () => {} } },
+    sessionProjections: { register() { return () => {} } },
     systemPrompt: { section() { return () => {} } },
+    on() { return () => {} },
     effect(fn) { return fn() },
     inject() {}, // webServer/connection/credentials never become ready in headless
   }

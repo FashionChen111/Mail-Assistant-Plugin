@@ -56,19 +56,20 @@ test('isUserMessageTriggeringMail only accepts user-authored messages', () => {
   )
 })
 
-test('createSessionScope uses sessionProjections for Turn-1 inbox splice and resume user/message', async () => {
+test('createSessionScope reads and unregisters the rc.1 projection for first turns and replay', async () => {
   let registeredDef = null
+  let disposed = false
   const states = new WeakMap()
   const ctx = {
     sessionProjections: {
-      async register(def) {
+      register(def) {
         registeredDef = def
-        return {
-          stateOf(session) {
-            return states.get(session) ?? def.init()
-          },
-          async dispose() {},
-        }
+        return () => { disposed = true }
+      },
+      stateOf(session, key) {
+        assert.equal(key, 'dsh-exchange:activated')
+        if (disposed) return undefined
+        return states.get(session) ?? registeredDef.init()
       },
     },
   }
@@ -115,31 +116,5 @@ test('createSessionScope uses sessionProjections for Turn-1 inbox splice and res
   assert.equal(scope.isSessionActivated(sessionC), true)
 
   await scope.dispose()
-})
-
-test('createSessionScope falls back to session/event when sessionProjections is absent', async () => {
-  const listeners = []
-  const ctx = {
-    on(eventName, fn) {
-      listeners.push({ eventName, fn })
-      return () => {}
-    },
-  }
-
-  const scope = await createSessionScope(ctx, { explicitPrefix: '@mail' })
-  const s1 = { id: 's1' }
-  const s2 = { id: 's2' }
-
-  assert.equal(scope.isSessionActivated(s1), false)
-  for (const l of listeners) {
-    if (l.eventName === 'session/event') {
-      l.fn(s1, {
-        type: 'agent/inbox/spliced',
-        data: { inserted: [{ source: { kind: 'user' }, content: [{ type: 'text', text: '@mail hi' }] }] },
-      })
-    }
-  }
-  assert.equal(scope.isSessionActivated(s1), true)
-  assert.equal(scope.isSessionActivated(s2), false)
-  await scope.dispose()
+  assert.equal(scope.isSessionActivated(sessionA), false)
 })

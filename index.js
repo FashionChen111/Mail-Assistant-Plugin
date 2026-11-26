@@ -5,16 +5,16 @@ import { createSessionScope } from './src/scope.js'
 import { createExchangeTools, registerExchangeTools } from './src/tools/index.js'
 
 export const name = 'dsh-exchange'
-export const inject = ['tools', 'sessionProjections', 'systemPrompt']
+export const inject = ['agents', 'tools', 'sessionProjections', 'systemPrompt']
 export { Config }
 
-export async function apply(ctx, rawConfig = {}) {
+export function apply(ctx, rawConfig = {}) {
   const config = resolveConfig(rawConfig)
   const statePath = join(config.dataDir, 'state.json')
   const auditPath = join(config.dataDir, 'audit.jsonl')
   const activityPath = join(config.dataDir, 'activity.jsonl')
 
-  const scope = await createSessionScope(ctx, { explicitPrefix: config.explicitPrefix })
+  const scope = createSessionScope(ctx, { explicitPrefix: config.explicitPrefix })
   const tools = createExchangeTools({
     ctx,
     config,
@@ -27,7 +27,7 @@ export async function apply(ctx, rawConfig = {}) {
   if (typeof ctx.effect === 'function') {
     ctx.effect(() => () => {
       disposeTools()
-      void scope.dispose()
+      scope.dispose()
     }, 'dsh-exchange: tools and scope')
   }
 

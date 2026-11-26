@@ -1160,30 +1160,47 @@ export function createExchangeTools({
 }
 
 export function registerExchangeTools(ctx, { tools, scope }) {
-  const disposers = []
-  const when = ({ agent }) => Boolean(agent?.session && scope.isSessionActivated(agent.session))
+  const names = new Set(tools.map((tool) => tool.name))
+  const restriction = { deny: [...names] }
+  const restrictions = new Map()
+  const active = (agent) => scope.isSessionActivated(agent?.session)
+  const toolDisposers = tools.map((tool) => ctx.tools.register(tool))
 
-  for (const def of tools) {
-    const dispose = ctx.tools.register(def, { when })
-    if (typeof dispose === 'function') disposers.push(dispose)
+  const restrict = (agent) => {
+    if (!active(agent) && !restrictions.has(agent)) {
+      restrictions.set(agent, agent.ctx.tools.restrict(restriction))
+    }
   }
-
-  const systemPrompt = typeof ctx?.get === 'function'
-    ? ctx.get('systemPrompt')
-    : ctx?.systemPrompt
-  if (systemPrompt && typeof systemPrompt.section === 'function') {
-    const disposePrompt = systemPrompt.section({
+  const liftRestriction = (agent) => {
+    const dispose = restrictions.get(agent)
+    restrictions.delete(agent)
+    return dispose?.()
+  }
+  const disposers = [
+    ctx.tools.guard(({ name, agent }) => names.has(name) && !active(agent)
+      ? 'Activate Mail Assistant in this session before calling Exchange tools.'
+      : undefined),
+    ctx.systemPrompt.section({
       name: 'dsh-exchange:instructions',
       order: 3200,
       interpolate: false,
-      text: ({ agent }) => (agent?.session && scope.isSessionActivated(agent.session) ? EXCHANGE_SYSTEM_PROMPT : ''),
-    })
-    if (typeof disposePrompt === 'function') disposers.push(disposePrompt)
-  }
+      text: ({ agent }) => active(agent) ? EXCHANGE_SYSTEM_PROMPT : '',
+    }),
+    ctx.on('agent/created', ({ agent }) => { restrict(agent) }),
+    ctx.on('agent/disposed', ({ agent }) => { liftRestriction(agent) }),
+    ctx.on('session/event', (session, event) => {
+      if (event.type !== 'agent/inbox/spliced' && event.type !== 'user/message') return
+      const agent = ctx.agents.get(session.id)
+      if (agent?.session === session && restrictions.has(agent) && active(agent)) {
+        liftRestriction(agent)
+      }
+    }),
+  ]
+  for (const agent of ctx.agents.list()) restrict(agent)
 
   return () => {
-    for (const d of disposers.splice(0)) {
-      try { d() } catch {}
-    }
+    for (const dispose of toolDisposers.splice(0)) dispose()
+    for (const dispose of disposers.splice(0)) dispose()
+    for (const agent of restrictions.keys()) liftRestriction(agent)
   }
 }

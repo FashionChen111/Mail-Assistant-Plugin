@@ -553,11 +553,16 @@ window.__ModuleLoader__.load({
         width: 40px;
         height: 22px;
         border-radius: 999px;
-        border: 1px solid var(--dsw-alias-border-l3, rgba(128,128,128,0.35));
-        background: var(--dsw-alias-interactive-bg-hover, rgba(128,128,128,0.22));
+        corner-shape: round;
+        border: 1px solid var(--dsw-alias-border-l3, rgba(128,128,128,0.42));
+        background: var(--dsw-alias-border-l3, rgba(128,128,128,0.38));
         padding: 0;
         cursor: pointer;
         transition: background-color 140ms ease, border-color 140ms ease;
+      }
+      .dsh-ex-switch:focus-visible {
+        outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-alias-state-business-primary, #4176e6);
+        outline-offset: 2px;
       }
       .dsh-ex-switch[aria-checked="true"] {
         background: var(--dsw-alias-state-business-primary, #4176e6);
@@ -574,7 +579,8 @@ window.__ModuleLoader__.load({
         width: 16px;
         height: 16px;
         border-radius: 999px;
-        background: #ffffff;
+        corner-shape: round;
+        background: var(--dsw-alias-switch-thumb, #ffffff);
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
         transition: transform 140ms ease;
       }
@@ -630,6 +636,7 @@ window.__ModuleLoader__.load({
       let visible = readStoredSidebarVisibility();
       let slotDisposers = [];
       let disposed = false;
+      let userExplicitlyToggled = false;
       const listeners = new Set();
 
       const notify = () => {
@@ -682,7 +689,11 @@ window.__ModuleLoader__.load({
       };
 
       const setVisible = (next, opts) => {
+        if (disposed) return;
         const boolNext = Boolean(next);
+        if (!opts || opts.fromServer !== true) {
+          userExplicitlyToggled = true;
+        }
         if (!opts || opts.persistLocal !== false) {
           writeStoredSidebarVisibility(boolNext);
         }
@@ -692,9 +703,11 @@ window.__ModuleLoader__.load({
         notify();
       };
 
-      const syncFromServer = (data) => {
+      const syncFromServer = (data, opts) => {
+        if (disposed) return;
+        if (opts && opts.fromBoot && userExplicitlyToggled) return;
         if (data && data.ui && typeof data.ui.showSidebarEntry === 'boolean') {
-          setVisible(data.ui.showSidebarEntry);
+          setVisible(data.ui.showSidebarEntry, { fromServer: true });
         }
       };
 
@@ -928,6 +941,14 @@ window.__ModuleLoader__.load({
       const hideHeader = Boolean(props && props.hideHeader);
       const tRef = useRef(t);
       tRef.current = t;
+      const mountedRef = useRef(true);
+
+      useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+          mountedRef.current = false;
+        };
+      }, []);
 
       const [loading, setLoading] = useState(true);
       const [loadFailed, setLoadFailed] = useState(false);
@@ -1102,16 +1123,9 @@ window.__ModuleLoader__.load({
 
       const handleToggleSidebarShortcut = async () => {
         if (controlsDisabled || togglingSidebar) return;
-        const prev = showSidebarEntry;
-        const next = !prev;
+        const next = !showSidebarEntry;
         setTogglingSidebar(true);
         setFeedback(null);
-        setShowSidebarEntry(next);
-        if (activeSidebarController) {
-          activeSidebarController.setVisible(next);
-        } else {
-          writeStoredSidebarVisibility(next);
-        }
         try {
           const resp = await fetch('dsh-exchange/api/save', {
             method: 'POST',
@@ -1120,24 +1134,32 @@ window.__ModuleLoader__.load({
           });
           const data = await readJsonSafely(resp);
           if (!resp.ok || !data.ok) {
-            setShowSidebarEntry(prev);
-            if (activeSidebarController) activeSidebarController.setVisible(prev);
-            else writeStoredSidebarVisibility(prev);
-            setFeedback({ scope: 'bottom', tone: 'err', text: formatApiError(data, resp.status, t) });
+            if (mountedRef.current) {
+              setFeedback({ scope: 'bottom', tone: 'err', text: formatApiError(data, resp.status, t) });
+            }
             return;
           }
-          setFeedback({
-            scope: 'bottom',
-            tone: 'ok',
-            text: next ? t('sidebarShortcutShownOk') : t('sidebarShortcutHiddenOk'),
-          });
+          if (activeSidebarController) {
+            activeSidebarController.setVisible(next);
+          } else {
+            writeStoredSidebarVisibility(next);
+          }
+          if (mountedRef.current) {
+            setShowSidebarEntry(next);
+            setFeedback({
+              scope: 'bottom',
+              tone: 'ok',
+              text: next ? t('sidebarShortcutShownOk') : t('sidebarShortcutHiddenOk'),
+            });
+          }
         } catch (err) {
-          setShowSidebarEntry(prev);
-          if (activeSidebarController) activeSidebarController.setVisible(prev);
-          else writeStoredSidebarVisibility(prev);
-          setFeedback({ scope: 'bottom', tone: 'err', text: err?.message || String(err) });
+          if (mountedRef.current) {
+            setFeedback({ scope: 'bottom', tone: 'err', text: err?.message || String(err) });
+          }
         } finally {
-          setTogglingSidebar(false);
+          if (mountedRef.current) {
+            setTogglingSidebar(false);
+          }
         }
       };
 
@@ -1941,7 +1963,7 @@ window.__ModuleLoader__.load({
               .then((resp) => (resp && resp.ok ? readJsonSafely(resp) : null))
               .then((data) => {
                 if (data && data.ok) {
-                  sidebarController.syncFromServer(data);
+                  sidebarController.syncFromServer(data, { fromBoot: true });
                 }
               })
               .catch(() => {});

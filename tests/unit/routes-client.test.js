@@ -717,4 +717,132 @@ test('client.js registers dynamic sidebar.panellist + main page, leaves panel on
     assert.equal(env.activeSlots.some((r) => r.opts.name === 'sidebar.panellist'), true)
     assert.equal(env.activeSlots.some((r) => r.opts.name === 'main'), true)
   }
+
+  // 6. Runtime switch handler inside MailAssistantMainPage: must await POST /save BEFORE unmounting so failures keep panel mounted and show error feedback
+  {
+    let saveOutcome = { ok: false, status: 500, body: { ok: false, error: 'NET_001', message: 'disk full' } }
+    let loaded = null
+    const storageMap = new Map()
+    const sandbox = {
+      window: {
+        __ModuleLoader__: { load(entry) { loaded = entry } },
+        localStorage: {
+          getItem(k) { return storageMap.has(k) ? storageMap.get(k) : null },
+          setItem(k, v) { storageMap.set(k, String(v)) },
+        },
+      },
+      localStorage: {
+        getItem(k) { return storageMap.has(k) ? storageMap.get(k) : null },
+        setItem(k, v) { storageMap.set(k, String(v)) },
+      },
+      fetch: async (url, opts) => {
+        if (url === 'dsh-exchange/api/status') {
+          return {
+            ok: true,
+            status: 200,
+            async text() { return JSON.stringify({ ok: true, account: {}, access: { mode: 'blacklist', folders: [], emergencyLock: false }, ui: { showSidebarEntry: true } }) },
+          }
+        }
+        if (url === 'dsh-exchange/api/save' && opts?.method === 'POST') {
+          return {
+            ok: saveOutcome.ok,
+            status: saveOutcome.status,
+            async text() { return JSON.stringify(saveOutcome.body) },
+          }
+        }
+        return { ok: false, status: 404, async text() { return '{}' } }
+      },
+      console,
+      setTimeout,
+      clearTimeout,
+      URL,
+    }
+    vm.runInNewContext(clientCode, sandbox, { filename: 'client.js' })
+
+    // Stateful minimal React hook runner for ExchangeSettingsPanel
+    const states = []
+    const refs = []
+    let stateIdx = 0
+    let refIdx = 0
+    const fakeReact = {
+      createElement(type, props, ...children) { return { type, props, children } },
+      useState(init) {
+        const i = stateIdx++
+        if (states.length <= i) states.push(typeof init === 'function' ? init() : init)
+        return [states[i], (v) => { states[i] = typeof v === 'function' ? v(states[i]) : v }]
+      },
+      useEffect() {},
+      useCallback(fn) { return fn },
+      useMemo(fn) { return fn() },
+      useRef(init) {
+        const i = refIdx++
+        if (refs.length <= i) refs.push({ current: init })
+        return refs[i]
+      },
+    }
+    const plugin = loaded.factory((spec) => {
+      if (spec === 'react') return fakeReact
+      throw new Error(`Unexpected require: ${spec}`)
+    })
+    const env = makeMockCtx('dsh-exchange')
+    plugin.apply(env.mockCtx)
+    // Flush async boot fetch('dsh-exchange/api/status')
+    await new Promise((r) => setTimeout(r, 15))
+
+    const settingsEntry = env.activeSlots.find((r) => r.opts.name === 'settings.section')
+    const renderPanel = () => {
+      stateIdx = 0
+      refIdx = 0
+      return settingsEntry.component({ t: (k) => env.registeredLocales['dsh-exchange'].en[k] ?? k })
+    }
+    const findNode = (tree, pred) => {
+      if (!tree || typeof tree !== 'object') return null
+      if (pred(tree)) return tree
+      if (Array.isArray(tree.children)) {
+        for (const c of tree.children) {
+          const hit = findNode(c, pred)
+          if (hit) return hit
+        }
+      }
+      return null
+    }
+
+    // Mark loading=false (state index 0) as after mount status load
+    renderPanel()
+    states[0] = false
+    const tree1 = renderPanel()
+
+    // Verify switch CSS prevents squircle deformation via corner-shape: round
+    const styleNode = findNode(tree1, (n) => n.type === 'style')
+    assert.match(String(styleNode.children.join('')), /corner-shape:\s*round/)
+
+    const switchBtn1 = findNode(tree1, (n) => n.props?.role === 'switch')
+    assert.ok(switchBtn1)
+
+    // Case A: POST /save FAILS (500) -> must NOT leave main panel or dispose slots, and must set error feedback
+    await switchBtn1.props.onClick()
+    assert.deepEqual(env.selectPanelCalls, [], 'failed POST /save must NOT call layout.selectPanel(null)')
+    assert.equal(env.activeSlots.some((r) => r.opts.name === 'main'), true, 'failed POST /save must keep main slot mounted')
+    assert.equal(plugin.__getSidebarController().getSnapshot(), true)
+    const treeAfterErr = renderPanel()
+    const alertBanner = findNode(treeAfterErr, (n) => n.props?.role === 'alert')
+    assert.ok(alertBanner, 'failed POST /save must display error feedback banner')
+
+    // Case B: POST /save SUCCEEDS (200) -> leaves active main panel and disposes BOTH slots
+    saveOutcome = { ok: true, status: 200, body: { ok: true, state: { ui: { showSidebarEntry: false } } } }
+    const switchBtn2 = findNode(treeAfterErr, (n) => n.props?.role === 'switch')
+    await switchBtn2.props.onClick()
+    assert.deepEqual(env.selectPanelCalls, [null], 'successful hide while active must return to conversation')
+    assert.equal(env.activeSlots.some((r) => r.opts.name === 'sidebar.panellist'), false)
+    assert.equal(env.activeSlots.some((r) => r.opts.name === 'main'), false)
+    assert.equal(storageMap.get('dsh-exchange:showSidebarEntry'), 'false')
+
+    // Case C: Late boot syncFromServer after user explicitly toggled must NOT overwrite user's choice, and disposed controller ignores calls
+    const ctrl = plugin.__getSidebarController()
+    ctrl.syncFromServer({ ok: true, ui: { showSidebarEntry: true } }, { fromBoot: true })
+    assert.equal(ctrl.getSnapshot(), false, 'late boot sync must not clobber explicit user toggle')
+    env.disposeAll()
+    ctrl.setVisible(true)
+    assert.equal(env.activeSlots.some((r) => r.opts.name === 'sidebar.panellist'), false, 'disposed controller must not re-mount slots')
+  }
 })

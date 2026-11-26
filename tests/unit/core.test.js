@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, rm, stat, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { HarnessError } from '@deepseek-ai/dsh-error'
+import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { credentialKey } from '@deepseek-ai/dsh-credentials'
 
 import { ExchangeError, ERROR_CODES, isAbortError, throwIfAborted } from '../../src/errors.js'

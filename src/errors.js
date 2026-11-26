@@ -1,4 +1,4 @@
-import { HarnessError } from '@deepseek-ai/dsh-error'
+import { HarnessError } from '@deepseek-ai/dsh-llm'
 
 export const ERROR_CODES = Object.freeze({
   AUTH_001: 'AUTH_001',

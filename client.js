@@ -467,18 +467,14 @@ window.__ModuleLoader__.load({
         border-color: var(--dsw-alias-border-l3, rgba(128,128,128,0.3));
         background: color-mix(in srgb, currentColor 8%, transparent);
       }
-      .dsh-ex-sticky-footer {
-        position: sticky;
-        bottom: 0;
-        z-index: 5;
+      .dsh-ex-footer-bar {
         display: flex;
         flex-direction: column;
         gap: 10px;
         padding: 12px 14px;
         border-radius: 10px;
-        border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.25));
-        background: var(--dsw-alias-bg-base, #ffffff);
-        box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.08);
+        border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.22));
+        background: var(--dsw-alias-card-fill, var(--dsw-alias-bg-layer-1, transparent));
       }
       .dsh-ex-actions {
         display: flex;
@@ -727,7 +723,7 @@ window.__ModuleLoader__.load({
       const [probing, setProbing] = useState(false);
       const [saving, setSaving] = useState(false);
       const [confirmingReset, setConfirmingReset] = useState(false);
-      const [feedback, setFeedback] = useState(null); // { tone: 'ok' | 'err' | 'warn', text: string }
+      const [feedback, setFeedback] = useState(null); // { scope: 'top' | 'bottom', tone: 'ok' | 'err' | 'warn', text: string }
 
       const selectedFolders = modeFolders[mode] || [];
       const setSelectedFoldersForMode = useCallback((targetMode, updater) => {
@@ -864,16 +860,17 @@ window.__ModuleLoader__.load({
           });
           const data = await readJsonSafely(resp);
           if (!resp.ok || !data.ok) {
-            setFeedback({ tone: 'err', text: formatApiError(data, resp.status, t) });
+            setFeedback({ scope: 'top', tone: 'err', text: formatApiError(data, resp.status, t) });
             return;
           }
           setEmergencyLock(nextLock);
           setFeedback({
+            scope: 'top',
             tone: nextLock ? 'warn' : 'ok',
             text: nextLock ? t('emergencyLockedOk') : t('emergencyUnlockedOk'),
           });
         } catch (err) {
-          setFeedback({ tone: 'err', text: err?.message || String(err) });
+          setFeedback({ scope: 'top', tone: 'err', text: err?.message || String(err) });
         } finally {
           setTogglingLock(false);
         }
@@ -897,7 +894,7 @@ window.__ModuleLoader__.load({
           });
           const data = await readJsonSafely(resp);
           if (!resp.ok || !data.ok) {
-            setFeedback({ tone: 'err', text: formatApiError(data, resp.status, t) });
+            setFeedback({ scope: 'top', tone: 'err', text: formatApiError(data, resp.status, t) });
             return;
           }
           const loaded = Array.isArray(data.folders) ? data.folders : [];
@@ -905,11 +902,12 @@ window.__ModuleLoader__.load({
           setProbedPaths(new Set(loaded.map((f) => f.path)));
           const baseMsg = t('probeSuccess', { count: String(loaded.length) });
           setFeedback({
+            scope: 'top',
             tone: 'ok',
             text: isDirty ? `${baseMsg} ${t('probeUnsavedHint')}` : baseMsg,
           });
         } catch (err) {
-          setFeedback({ tone: 'err', text: err?.message || String(err) });
+          setFeedback({ scope: 'top', tone: 'err', text: err?.message || String(err) });
         } finally {
           setProbing(false);
         }
@@ -927,7 +925,7 @@ window.__ModuleLoader__.load({
           });
           const data = await readJsonSafely(resp);
           if (!resp.ok || !data.ok) {
-            setFeedback({ tone: 'err', text: formatApiError(data, resp.status, t) });
+            setFeedback({ scope: 'top', tone: 'err', text: formatApiError(data, resp.status, t) });
             return;
           }
           const nextSet = Boolean(data.passwordSet);
@@ -936,15 +934,15 @@ window.__ModuleLoader__.load({
           setPasswordSource(nextSource);
           setEditingPassword(!nextSet && nextSource !== 'env');
           setPasswordInput('');
-          setFeedback({ tone: 'ok', text: t('passwordClearedOk') });
+          setFeedback({ scope: 'top', tone: 'ok', text: t('passwordClearedOk') });
         } catch (err) {
-          setFeedback({ tone: 'err', text: err?.message || String(err) });
+          setFeedback({ scope: 'top', tone: 'err', text: err?.message || String(err) });
         } finally {
           setSaving(false);
         }
       };
 
-      const handleSave = async () => {
+      const handleSave = async (scope = 'bottom') => {
         if (controlsDisabled || saving || urlErrorKey) return;
         setFeedback(null);
         setConfirmingReset(false);
@@ -964,7 +962,7 @@ window.__ModuleLoader__.load({
           });
           const data = await readJsonSafely(resp);
           if (!resp.ok || !data.ok) {
-            setFeedback({ tone: 'err', text: formatApiError(data, resp.status, t) });
+            setFeedback({ scope, tone: 'err', text: formatApiError(data, resp.status, t) });
             return;
           }
           const nextSet = Boolean(data.passwordSet);
@@ -984,9 +982,9 @@ window.__ModuleLoader__.load({
               folders: selectedFolders,
             }),
           );
-          setFeedback({ tone: 'ok', text: t('savedSuccess') });
+          setFeedback({ scope, tone: 'ok', text: t('savedSuccess') });
         } catch (err) {
-          setFeedback({ tone: 'err', text: err?.message || String(err) });
+          setFeedback({ scope, tone: 'err', text: err?.message || String(err) });
         } finally {
           setSaving(false);
         }
@@ -1004,7 +1002,7 @@ window.__ModuleLoader__.load({
           });
           const data = await readJsonSafely(resp);
           if (!resp.ok || !data.ok) {
-            setFeedback({ tone: 'err', text: formatApiError(data, resp.status, t) });
+            setFeedback({ scope: 'bottom', tone: 'err', text: formatApiError(data, resp.status, t) });
             return;
           }
           setMode('blacklist');
@@ -1021,9 +1019,9 @@ window.__ModuleLoader__.load({
               folders: [],
             }),
           );
-          setFeedback({ tone: 'ok', text: t('resetSuccess') });
+          setFeedback({ scope: 'bottom', tone: 'ok', text: t('resetSuccess') });
         } catch (err) {
-          setFeedback({ tone: 'err', text: err?.message || String(err) });
+          setFeedback({ scope: 'bottom', tone: 'err', text: err?.message || String(err) });
         } finally {
           setSaving(false);
         }
@@ -1265,18 +1263,45 @@ window.__ModuleLoader__.load({
           ),
           h(
             'div',
-            { className: 'dsh-ex-inline' },
+            { className: 'dsh-ex-actions' },
             h(
-              'button',
-              {
-                type: 'button',
-                className: 'dsh-ex-btn',
-                disabled: controlsDisabled || probing || !serverUrl.trim() || Boolean(urlErrorKey),
-                onClick: handleProbe,
-              },
-              probing ? t('probingBtn') : t('probeBtn'),
+              'div',
+              { className: 'dsh-ex-inline' },
+              h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'dsh-ex-btn dsh-ex-btn-primary',
+                  disabled: controlsDisabled || saving || Boolean(urlErrorKey),
+                  onClick: () => handleSave('top'),
+                },
+                saving ? t('savingBtn') : t('saveBtn'),
+              ),
+              h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'dsh-ex-btn',
+                  disabled: controlsDisabled || probing || !serverUrl.trim() || Boolean(urlErrorKey),
+                  onClick: handleProbe,
+                },
+                probing ? t('probingBtn') : t('probeBtn'),
+              ),
             ),
+            isDirty
+              ? h('span', { className: 'dsh-ex-pill dsh-ex-pill-warn' }, t('unsavedBadge'))
+              : null,
           ),
+          feedback && feedback.scope === 'top'
+            ? h(
+                'div',
+                {
+                  role: feedback.tone === 'err' ? 'alert' : 'status',
+                  className: `dsh-ex-banner ${feedback.tone === 'ok' ? 'dsh-ex-banner-ok' : feedback.tone === 'warn' ? 'dsh-ex-banner-warn' : 'dsh-ex-banner-err'}`,
+                },
+                feedback.text,
+              )
+            : null,
         ),
         // Folder Access Policy Card
         h(
@@ -1474,11 +1499,11 @@ window.__ModuleLoader__.load({
               })}`,
             )
           : null,
-        // Sticky bottom action footer with inline feedback & 2-step Reset Policy confirmation (UX C1, C3)
+        // Bottom action footer (non-overlapping, with inline feedback & 2-step Reset Policy confirmation)
         h(
           'div',
-          { className: 'dsh-ex-sticky-footer' },
-          feedback
+          { className: 'dsh-ex-footer-bar' },
+          feedback && feedback.scope !== 'top'
             ? h(
                 'div',
                 {
@@ -1531,7 +1556,7 @@ window.__ModuleLoader__.load({
                   type: 'button',
                   className: 'dsh-ex-btn dsh-ex-btn-primary',
                   disabled: controlsDisabled || saving || Boolean(urlErrorKey),
-                  onClick: handleSave,
+                  onClick: () => handleSave('bottom'),
                 },
                 saving ? t('savingBtn') : t('saveBtn'),
               ),

@@ -9,6 +9,8 @@ import vm from 'node:vm'
 import { ROUTE_PATHS, registerExchangeRoutes } from '../../src/routes.js'
 import { readState } from '../../src/state.js'
 
+const ownerPeer = { principal: { kind: 'owner' }, signal: new AbortController().signal }
+
 function createMockReqRes({ method = 'GET', url = '', headers = {}, body = '' } = {}) {
   const req = new EventEmitter()
   req.method = method
@@ -44,13 +46,12 @@ function createMockReqRes({ method = 'GET', url = '', headers = {}, body = '' } 
   return { req, res }
 }
 
-test('HTTP routes enforce trust fence, method/content-type/size guards, HTTPS, credential isolation, probe, and save/reset', async () => {
+test('HTTP routes enforce method/content-type/size guards, HTTPS, credential isolation, probe, and save/reset', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-ex-routes-'))
   try {
     const statePath = join(dir, 'state.json')
     const routes = new Map()
     const credStore = new Map()
-    let rejectCode = undefined
     let probeCalls = 0
 
     const ctx = {
@@ -59,9 +60,6 @@ test('HTTP routes enforce trust fence, method/content-type/size guards, HTTPS, c
           routes.set(route.path, route)
           return () => routes.delete(route.path)
         },
-      },
-      connection: {
-        requestRejection() { return rejectCode },
       },
       credentials: {
         async readRecord(k) { return credStore.get(k) },
@@ -112,26 +110,17 @@ test('HTTP routes enforce trust fence, method/content-type/size guards, HTTPS, c
     assert.equal(routes.has(ROUTE_PATHS.probe), true)
     assert.equal(routes.has(ROUTE_PATHS.save), true)
 
-    // Review Focus #4: Trust fence rejection (401/403)
-    rejectCode = 403
-    {
-      const { req, res } = createMockReqRes({ method: 'GET' })
-      await routes.get(ROUTE_PATHS.status).handler(req, res)
-      assert.equal(res._read().statusCode, 403)
-    }
-    rejectCode = undefined
-
     // Method not allowed (405)
     {
       const { req, res } = createMockReqRes({ method: 'POST' })
-      await routes.get(ROUTE_PATHS.status).handler(req, res)
+      await routes.get(ROUTE_PATHS.status).handler(req, res, ownerPeer)
       assert.equal(res._read().statusCode, 405)
     }
 
     // Non-JSON content-type -> 415
     {
       const { req, res } = createMockReqRes({ method: 'POST', headers: { 'content-type': 'text/plain' }, body: '{}' })
-      await routes.get(ROUTE_PATHS.save).handler(req, res)
+      await routes.get(ROUTE_PATHS.save).handler(req, res, ownerPeer)
       assert.equal(res._read().statusCode, 415)
     }
 
@@ -142,7 +131,7 @@ test('HTTP routes enforce trust fence, method/content-type/size guards, HTTPS, c
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ pad: 'x'.repeat(70000) }),
       })
-      await routes.get(ROUTE_PATHS.save).handler(req, res)
+      await routes.get(ROUTE_PATHS.save).handler(req, res, ownerPeer)
       assert.equal(res._read().statusCode, 413)
     }
 
@@ -155,7 +144,7 @@ test('HTTP routes enforce trust fence, method/content-type/size guards, HTTPS, c
           account: { serverUrl: 'http://exchange.corp/EWS/Exchange.asmx', email: 'a@b.com' },
         }),
       })
-      await routes.get(ROUTE_PATHS.save).handler(req, res)
+      await routes.get(ROUTE_PATHS.save).handler(req, res, ownerPeer)
       const out = res._read()
       assert.equal(out.statusCode, 400)
       assert.equal(out.json.error, 'NET_001')
@@ -181,7 +170,7 @@ test('HTTP routes enforce trust fence, method/content-type/size guards, HTTPS, c
           },
         }),
       })
-      await routes.get(ROUTE_PATHS.save).handler(req, res)
+      await routes.get(ROUTE_PATHS.save).handler(req, res, ownerPeer)
       const out = res._read()
       assert.equal(out.statusCode, 200)
       assert.equal(out.json.ok, true)
@@ -196,7 +185,7 @@ test('HTTP routes enforce trust fence, method/content-type/size guards, HTTPS, c
     // GET /status never leaks password
     {
       const { req, res } = createMockReqRes({ method: 'GET' })
-      await routes.get(ROUTE_PATHS.status).handler(req, res)
+      await routes.get(ROUTE_PATHS.status).handler(req, res, ownerPeer)
       const out = res._read()
       assert.equal(out.statusCode, 200)
       assert.equal(out.headers['cache-control'], 'no-store')
@@ -214,7 +203,7 @@ test('HTTP routes enforce trust fence, method/content-type/size guards, HTTPS, c
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ ui: { showSidebarEntry: false } }),
       })
-      await routes.get(ROUTE_PATHS.save).handler(req, res)
+      await routes.get(ROUTE_PATHS.save).handler(req, res, ownerPeer)
       const out = res._read()
       assert.equal(out.statusCode, 200)
       assert.deepEqual(out.json.state.ui, { showSidebarEntry: false })
@@ -235,7 +224,7 @@ test('HTTP routes enforce trust fence, method/content-type/size guards, HTTPS, c
           username: 'alice',
         }),
       })
-      await routes.get(ROUTE_PATHS.probe).handler(req, res)
+      await routes.get(ROUTE_PATHS.probe).handler(req, res, ownerPeer)
       const out = res._read()
       assert.equal(out.statusCode, 200)
       assert.equal(out.json.ok, true)
@@ -254,7 +243,7 @@ test('HTTP routes enforce trust fence, method/content-type/size guards, HTTPS, c
           password: 'bad-pass',
         }),
       })
-      await routes.get(ROUTE_PATHS.probe).handler(req, res)
+      await routes.get(ROUTE_PATHS.probe).handler(req, res, ownerPeer)
       const out = res._read()
       assert.equal(out.statusCode, 401)
       assert.equal(out.json.error, 'AUTH_001')
@@ -267,7 +256,7 @@ test('HTTP routes enforce trust fence, method/content-type/size guards, HTTPS, c
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ reset: true }),
       })
-      await routes.get(ROUTE_PATHS.save).handler(req, res)
+      await routes.get(ROUTE_PATHS.save).handler(req, res, ownerPeer)
       assert.equal(res._read().statusCode, 200)
       const reread = await readState(statePath)
       assert.equal(reread.access.mode, 'blacklist')
@@ -289,9 +278,6 @@ test('HTTP routes use ctx.get() before property access so Cordis 4 undeclared-se
       webServer: {
         register(route) { routes.set(route.path, route); return () => {} },
       },
-      connection: {
-        requestRejection() { return undefined },
-      },
       credentials: {
         async readRecord() { return undefined },
         async describeRecord() { return { configured: false, writable: true } },
@@ -301,7 +287,6 @@ test('HTTP routes use ctx.get() before property access so Cordis 4 undeclared-se
     const strictCtx = {
       get(name) { return services[name] },
       get webServer() { return services.webServer },
-      get connection() { throw new Error('property connection is not declared in inject') },
       get credentials() { throw new Error('property credentials is not declared in inject') },
       effect(fn) { return fn() },
     }
@@ -313,7 +298,7 @@ test('HTTP routes use ctx.get() before property access so Cordis 4 undeclared-se
     })
 
     const { req, res } = createMockReqRes({ method: 'GET' })
-    await routes.get(ROUTE_PATHS.status).handler(req, res)
+    await routes.get(ROUTE_PATHS.status).handler(req, res, ownerPeer)
     const out = res._read()
     assert.equal(out.statusCode, 200)
     assert.equal(out.json.ok, true)
@@ -322,18 +307,18 @@ test('HTTP routes use ctx.get() before property access so Cordis 4 undeclared-se
   }
 })
 
-test('checkTrustFence fails closed with 403 when connection service is unavailable', async () => {
+test('all HTTP routes require host authentication and deny peers other than the owner', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-ex-trust-closed-'))
   try {
     const statePath = join(dir, 'state.json')
     const routes = new Map()
-    const ctxNoConn = {
+    const ctx = {
       webServer: {
         register(route) { routes.set(route.path, route); return () => {} },
       },
       effect(fn) { return fn() },
     }
-    registerExchangeRoutes(ctxNoConn, {
+    registerExchangeRoutes(ctx, {
       statePath,
       config: { maxSearchResults: 100, maxAttachmentMb: 25, maxBodyChars: 20000, requestTimeoutSeconds: 30, requestTimeoutMs: 30000, explicitPrefix: '@mail' },
       env: {},
@@ -345,9 +330,13 @@ test('checkTrustFence fails closed with 403 when connection service is unavailab
       [ROUTE_PATHS.history, 'GET'],
       [ROUTE_PATHS.historyClear, 'POST'],
     ]) {
-      const { req, res } = createMockReqRes({ method, headers: { 'content-type': 'application/json' }, body: '{}' })
-      await routes.get(path).handler(req, res)
-      assert.equal(res._read().statusCode, 403, `${path} must fail closed when connection service is absent`)
+      const route = routes.get(path)
+      assert.equal(route.auth, 'required', path)
+      for (const peer of [undefined, { ...ownerPeer, principal: { kind: 'api' } }]) {
+        const { req, res } = createMockReqRes({ method, headers: { 'content-type': 'application/json' }, body: '{}' })
+        await route.handler(req, res, peer)
+        assert.equal(res._read().statusCode, 403, path)
+      }
     }
   } finally {
     await rm(dir, { recursive: true, force: true })
@@ -392,13 +381,9 @@ test('HTTP history routes serve merged activity/audit records with filtering and
     })
 
     const routes = new Map()
-    let rejectCode = undefined
     const ctx = {
       webServer: {
         register(route) { routes.set(route.path, route); return () => routes.delete(route.path) },
-      },
-      connection: {
-        requestRejection() { return rejectCode },
       },
       credentials: {
         async readRecord() { return undefined },
@@ -417,31 +402,22 @@ test('HTTP history routes serve merged activity/audit records with filtering and
     assert.equal(routes.has(ROUTE_PATHS.history), true)
     assert.equal(routes.has(ROUTE_PATHS.historyClear), true)
 
-    // Trust fence rejection
-    rejectCode = 401
-    {
-      const { req, res } = createMockReqRes({ method: 'GET', url: '/dsh-exchange/api/history' })
-      await routes.get(ROUTE_PATHS.history).handler(req, res)
-      assert.equal(res._read().statusCode, 401)
-    }
-    rejectCode = undefined
-
     // Method not allowed checks
     {
       const { req, res } = createMockReqRes({ method: 'POST', url: '/dsh-exchange/api/history' })
-      await routes.get(ROUTE_PATHS.history).handler(req, res)
+      await routes.get(ROUTE_PATHS.history).handler(req, res, ownerPeer)
       assert.equal(res._read().statusCode, 405)
     }
     {
       const { req, res } = createMockReqRes({ method: 'GET', url: '/dsh-exchange/api/history/clear' })
-      await routes.get(ROUTE_PATHS.historyClear).handler(req, res)
+      await routes.get(ROUTE_PATHS.historyClear).handler(req, res, ownerPeer)
       assert.equal(res._read().statusCode, 405)
     }
 
     // GET /history unfiltered
     {
       const { req, res } = createMockReqRes({ method: 'GET', url: '/dsh-exchange/api/history?limit=10' })
-      await routes.get(ROUTE_PATHS.history).handler(req, res)
+      await routes.get(ROUTE_PATHS.history).handler(req, res, ownerPeer)
       const out = res._read()
       assert.equal(out.statusCode, 200)
       assert.equal(out.headers['cache-control'], 'no-store')
@@ -456,7 +432,7 @@ test('HTTP history routes serve merged activity/audit records with filtering and
     // GET /history filtered by category=draft&q=widevine
     {
       const { req, res } = createMockReqRes({ method: 'GET', url: '/dsh-exchange/api/history?category=draft&q=widevine' })
-      await routes.get(ROUTE_PATHS.history).handler(req, res)
+      await routes.get(ROUTE_PATHS.history).handler(req, res, ownerPeer)
       const out = res._read()
       assert.equal(out.statusCode, 200)
       assert.equal(out.json.total, 1)
@@ -467,7 +443,7 @@ test('HTTP history routes serve merged activity/audit records with filtering and
     // POST /history/clear requires application/json
     {
       const { req, res } = createMockReqRes({ method: 'POST', headers: { 'content-type': 'text/plain' }, body: '{}' })
-      await routes.get(ROUTE_PATHS.historyClear).handler(req, res)
+      await routes.get(ROUTE_PATHS.historyClear).handler(req, res, ownerPeer)
       assert.equal(res._read().statusCode, 415)
     }
 
@@ -475,7 +451,7 @@ test('HTTP history routes serve merged activity/audit records with filtering and
     const auditBefore = await readFile(auditPath, 'utf8')
     {
       const { req, res } = createMockReqRes({ method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
-      await routes.get(ROUTE_PATHS.historyClear).handler(req, res)
+      await routes.get(ROUTE_PATHS.historyClear).handler(req, res, ownerPeer)
       const out = res._read()
       assert.equal(out.statusCode, 200)
       assert.equal(out.json.ok, true)
@@ -486,7 +462,7 @@ test('HTTP history routes serve merged activity/audit records with filtering and
     // Subsequent GET /history returns 0 items
     {
       const { req, res } = createMockReqRes({ method: 'GET', url: '/dsh-exchange/api/history' })
-      await routes.get(ROUTE_PATHS.history).handler(req, res)
+      await routes.get(ROUTE_PATHS.history).handler(req, res, ownerPeer)
       const out = res._read()
       assert.equal(out.statusCode, 200)
       assert.equal(out.json.total, 0)

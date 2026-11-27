@@ -91,22 +91,6 @@ function getService(ctx, name) {
   return ctx[name]
 }
 
-function checkTrustFence(ctx, req, res) {
-  const conn = getService(ctx, 'connection')
-  if (!conn || typeof conn.requestRejection !== 'function') {
-    res.statusCode = 403
-    res.setHeader('cache-control', 'no-store')
-    res.end()
-    return true
-  }
-  const rejection = conn.requestRejection(req)
-  if (rejection === undefined) return false
-  res.statusCode = rejection
-  res.setHeader('cache-control', 'no-store')
-  res.end()
-  return true
-}
-
 function httpStatusForError(err) {
   if (err instanceof ExchangeError) {
     if (err.code === ERROR_CODES.AUTH_001) return 401
@@ -140,7 +124,19 @@ export function registerExchangeRoutes(
   const disposers = []
 
   const registerRoute = (label, route) => {
-    const register = () => webServer.register(route)
+    const register = () => webServer.register({
+      ...route,
+      auth: 'required',
+      async handler(req, res, peer) {
+        if (peer?.principal?.kind !== 'owner') {
+          res.statusCode = 403
+          res.setHeader('cache-control', 'no-store')
+          res.end()
+          return
+        }
+        await route.handler(req, res)
+      },
+    })
     if (typeof ctx.effect === 'function') {
       const dispose = ctx.effect(register, label)
       if (typeof dispose === 'function') disposers.push(dispose)
@@ -155,7 +151,6 @@ export function registerExchangeRoutes(
     kind: 'exact',
     path: ROUTE_PATHS.status,
     async handler(req, res) {
-      if (checkTrustFence(ctx, req, res)) return
       if (req.method !== 'GET') {
         sendMethodNotAllowed(res, 'GET')
         return
@@ -198,7 +193,6 @@ export function registerExchangeRoutes(
     kind: 'exact',
     path: ROUTE_PATHS.probe,
     async handler(req, res) {
-      if (checkTrustFence(ctx, req, res)) return
       if (req.method !== 'POST') {
         sendMethodNotAllowed(res, 'POST')
         return
@@ -256,7 +250,6 @@ export function registerExchangeRoutes(
     kind: 'exact',
     path: ROUTE_PATHS.save,
     async handler(req, res) {
-      if (checkTrustFence(ctx, req, res)) return
       if (req.method !== 'POST') {
         sendMethodNotAllowed(res, 'POST')
         return
@@ -351,7 +344,6 @@ export function registerExchangeRoutes(
     kind: 'exact',
     path: ROUTE_PATHS.history,
     async handler(req, res) {
-      if (checkTrustFence(ctx, req, res)) return
       if (req.method !== 'GET') {
         sendMethodNotAllowed(res, 'GET')
         return
@@ -397,7 +389,6 @@ export function registerExchangeRoutes(
     kind: 'exact',
     path: ROUTE_PATHS.historyClear,
     async handler(req, res) {
-      if (checkTrustFence(ctx, req, res)) return
       if (req.method !== 'POST') {
         sendMethodNotAllowed(res, 'POST')
         return

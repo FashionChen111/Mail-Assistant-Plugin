@@ -37,6 +37,14 @@ Select the branch that matches your DeepSeek Harness (DSH) host version:
 | **`0.2.3-alpha.2`** | [`0.2.3-alpha.2`](https://github.com/FashionChen111/Mail-Assistant-Plugin/tree/0.2.3-alpha.2) | `^24.22.3 \|\| >=26.13.1` | `v1.4.0-dsh-0.2.3-alpha.2` — adaptation for DSH `0.2.3-alpha.2` (Cordis 4.2 alpha, host route auth, pre-bundled EWS) |
 | **`0.2.0-rc.1`** | [`0.2.0-rc1`](https://github.com/FashionChen111/Mail-Assistant-Plugin/tree/0.2.0-rc1) | `^22.19.0 \|\| >=24` | `v1.4.0-dsh-0.2.0-rc1` — backport for DSH `0.2.0-rc.1` (pre-bundled EWS) |
 
+> **Switching branches after cloning:**
+> ```bash
+> git switch 0.2.2-rc3       # DSH 0.2.2-rc.3 (pinned)
+> git switch 0.2.3-alpha.2   # DSH 0.2.3-alpha.2 (requires npm ci to build bundled EWS)
+> git switch 0.2.0-rc1       # DSH 0.2.0-rc.1 (requires npm ci to build bundled EWS)
+> ```
+> For `0.2.0-rc1` and `0.2.3-alpha.2`, please follow the installation instructions in that branch's `README.md`.
+
 ---
 
 ## Highlights
@@ -72,6 +80,8 @@ Select the branch that matches your DeepSeek Harness (DSH) host version:
 ---
 
 ## Installation
+
+> The instructions below apply to `main` / `0.2.2-rc3` (DSH `>=0.2.2-rc.3 <0.3.0`). If you use DSH `0.2.0-rc.1` or `0.2.3-alpha.2`, switch to [`0.2.0-rc1`](https://github.com/FashionChen111/Mail-Assistant-Plugin/tree/0.2.0-rc1) or [`0.2.3-alpha.2`](https://github.com/FashionChen111/Mail-Assistant-Plugin/tree/0.2.3-alpha.2) first and follow that branch's README (`npm ci` + `npm pack` or local directory install).
 
 ### Option 1: From GitHub Release Tarball (Recommended)
 

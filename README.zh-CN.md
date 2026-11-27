@@ -37,6 +37,14 @@
 | **`0.2.3-alpha.2`** | [`0.2.3-alpha.2`](https://github.com/FashionChen111/Mail-Assistant-Plugin/tree/0.2.3-alpha.2) | `^24.22.3 \|\| >=26.13.1` | `v1.4.0-dsh-0.2.3-alpha.2` — 面向 DSH `0.2.3-alpha.2` 的适配分支（Cordis 4.2 alpha、宿主路由认证、预打包 EWS） |
 | **`0.2.0-rc.1`** | [`0.2.0-rc1`](https://github.com/FashionChen111/Mail-Assistant-Plugin/tree/0.2.0-rc1) | `^22.19.0 \|\| >=24` | `v1.4.0-dsh-0.2.0-rc1` — 面向 DSH `0.2.0-rc.1` 的向下兼容分支（预打包 EWS） |
 
+> **克隆后切换对应分支：**
+> ```bash
+> git switch 0.2.2-rc3       # 对应 DSH 0.2.2-rc.3（锁定版本）
+> git switch 0.2.3-alpha.2   # 对应 DSH 0.2.3-alpha.2（需执行 npm ci 构建预打包 EWS）
+> git switch 0.2.0-rc1       # 对应 DSH 0.2.0-rc.1（需执行 npm ci 构建预打包 EWS）
+> ```
+> 若使用 `0.2.0-rc1` 或 `0.2.3-alpha.2`，切到对应分支后请按该分支下的 `README.zh-CN.md` 步骤安装。
+
 ---
 
 ## 核心特性
@@ -72,6 +80,8 @@
 ---
 
 ## 安装方式
+
+> 以下安装步骤适用于 `main` / `0.2.2-rc3` 分支（DSH `>=0.2.2-rc.3 <0.3.0`）。若你使用 DSH `0.2.0-rc.1` 或 `0.2.3-alpha.2`，请先切换到 [`0.2.0-rc1`](https://github.com/FashionChen111/Mail-Assistant-Plugin/tree/0.2.0-rc1) 或 [`0.2.3-alpha.2`](https://github.com/FashionChen111/Mail-Assistant-Plugin/tree/0.2.3-alpha.2) 分支，并按该分支下的 README 执行安装（需先运行 `npm ci` 构建 EWS 运行包）。
 
 ### 方式一：通过 GitHub Release 插件包安装（推荐）
 

@@ -4,13 +4,13 @@
 
 # Mail Assistant 邮箱助理（`@local/dsh-exchange`）
 
-**面向 DeepSeek Harness（`>=0.2.2-rc.3 <0.3.0`）的隐私优先、仅保存草稿的企业自建 Microsoft Exchange（EWS + NTLM）邮箱插件**
+**面向 DeepSeek Harness（`0.2.3-alpha.2`）的隐私优先、仅保存草稿的企业自建 Microsoft Exchange（EWS + NTLM）邮箱插件**
 
 [English](./README.md) | **简体中文**
 
 [![最新版本](https://img.shields.io/github/v/release/FashionChen111/Mail-Assistant-Plugin?style=flat-square&logo=github&color=4176e6&label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC)](https://github.com/FashionChen111/Mail-Assistant-Plugin/releases)
-[![DeepSeek Harness](https://img.shields.io/badge/DeepSeek_Harness-%3E%3D0.2.2--rc.3-2563eb?style=flat-square)](#环境要求)
-[![Node.js](https://img.shields.io/badge/Node.js-%5E22.19_%7C%7C_%3E%3D24-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![DeepSeek Harness](https://img.shields.io/badge/DeepSeek_Harness-0.2.3--alpha.2-2563eb?style=flat-square)](#环境要求)
+[![Node.js](https://img.shields.io/badge/Node.js-%5E24.22.3_%7C%7C_%3E%3D26.13.1-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Exchange](https://img.shields.io/badge/Exchange-EWS_%2B_NTLM-0078d4?style=flat-square)](#环境要求)
 
 [![安全保障](https://img.shields.io/badge/%E5%AE%89%E5%85%A8%E4%BF%9D%E9%9A%9C-%E4%BB%85%E8%8D%89%E7%A8%BF%E4%B8%8D%E5%8F%91%E9%80%81-16a34a?style=flat-square)](#安全与隐私保障)
@@ -53,37 +53,40 @@
 
 ## 环境要求
 
-- **DeepSeek Harness (DSH)**：`>=0.2.2-rc.3 <0.3.0`
-- **Node.js**：`^22.19.0 || >=24`
+- **DeepSeek Harness (DSH)**：`0.2.3-alpha.2`
+- **Node.js**：`^24.22.3 || >=26.13.1`
 - **Exchange 服务器**：企业自建 Microsoft Exchange Server，开启 HTTPS EWS 与 NTLM 认证（已实测通过 Exchange Server SE 15.2.2562.49；EWS 协议协商版本为 Exchange 2013，兼容 2013/2016/2019/SE）。不包含 Microsoft 365 / OAuth2。
 
 ---
 
 ## 安装方式
 
-### 方式一：通过 GitHub Release 插件包安装（推荐）
-
-前往 [GitHub Releases](https://github.com/FashionChen111/Mail-Assistant-Plugin/releases) 下载 `local-dsh-exchange-1.4.0.tgz`，然后执行：
+设置和操作历史页面使用 `web` profile。安装 DSH 0.2.3-alpha.2，并确保 `pnpm` 在 PATH 上。在本地插件仓库切换到适配分支，按锁文件安装依赖并构建 EWS 运行包。
 
 ```bash
-dsh plugin --profile <你的profile名称> add ./local-dsh-exchange-1.4.0.tgz
+git switch 0.2.3-alpha.2
+npm ci
+```
+
+### 方式一：打包后安装
+
+```bash
+npm pack
+dsh plugin --profile web add ./local-dsh-exchange-1.4.0.tgz
 ```
 
 ### 方式二：从本地源码目录安装
 
 ```bash
-git clone https://github.com/FashionChen111/Mail-Assistant-Plugin.git
-cd Mail-Assistant-Plugin
-npm install
-dsh plugin --profile <你的profile名称> add "$(pwd)"
+dsh plugin --profile web add "file:$(pwd)"
 ```
 
-你也可以直接在 DSH Web 端点击 **插件 → 添加插件**，选择本地源码目录或 `.tgz` 插件包完成安装。
+也可以在 DSH Web 端打开 **插件 → 添加插件**，选择已构建的 `.tgz` 插件包。
 
 ### 验证插件装配
 
 ```bash
-dsh --profile <你的profile名称> --dump-config
+dsh --profile web --dump-config
 ```
 
 在输出中应能看到 `# == @local/dsh-exchange` 配置层及其默认的限流与触发词参数。

@@ -16,8 +16,11 @@ test('package.json declares valid DSH 0.2.3-alpha.2 bundle and client manifest',
     assert.equal(pkg.peerDependencies[`@deepseek-ai/dsh-${name}`], '0.2.3-alpha.2')
     assert.equal(pkg.devDependencies[`@deepseek-ai/dsh-${name}`], '0.2.3-alpha.2')
   }
-  assert.equal(pkg.dependencies['ews-javascript-api'], '0.15.3')
-  assert.ok(pkg.dependencies['@ewsjs/xhr'])
+  assert.equal(pkg.devDependencies['ews-javascript-api'], '0.15.3')
+  assert.equal(pkg.dependencies['ews-javascript-api'], undefined)
+  assert.ok(pkg.files.includes('dist/ews.cjs'))
+  assert.ok(pkg.files.includes('dist/ews-notices.txt'))
+  assert.equal(pkg.scripts.prepare, 'node scripts/build-ews.mjs')
   assert.equal(pkg.dsh.bundle.patch, './cordis.patch.yml')
   assert.equal(pkg.dsh.client.platform, 'web')
   assert.equal(pkg.exports['.'], './index.js')

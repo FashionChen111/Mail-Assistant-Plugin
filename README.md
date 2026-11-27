@@ -27,6 +27,18 @@ Designed for enterprise and certification project management workflows (Widevine
 
 ---
 
+## DSH Version & Branch Matrix
+
+Select the branch that matches your DeepSeek Harness (DSH) host version:
+
+| Target DSH Version | Branch | Node.js | Tag & Notes |
+| :--- | :--- | :--- | :--- |
+| **`>=0.2.2-rc.3 <0.3.0`** | [`main`](https://github.com/FashionChen111/Mail-Assistant-Plugin/tree/main) / [`0.2.2-rc3`](https://github.com/FashionChen111/Mail-Assistant-Plugin/tree/0.2.2-rc3) | `^22.19.0 \|\| >=24` | `v1.4.0` — `main` is the active development trunk; `0.2.2-rc3` pins the `0.2.2-rc.3` compatibility line |
+| **`0.2.3-alpha.2`** | [`0.2.3-alpha.2`](https://github.com/FashionChen111/Mail-Assistant-Plugin/tree/0.2.3-alpha.2) | `^24.22.3 \|\| >=26.13.1` | `v1.4.0-dsh-0.2.3-alpha.2` — adaptation for DSH `0.2.3-alpha.2` (Cordis 4.2 alpha, host route auth, pre-bundled EWS) |
+| **`0.2.0-rc.1`** | [`0.2.0-rc1`](https://github.com/FashionChen111/Mail-Assistant-Plugin/tree/0.2.0-rc1) | `^22.19.0 \|\| >=24` | `v1.4.0-dsh-0.2.0-rc1` — backport for DSH `0.2.0-rc.1` (pre-bundled EWS) |
+
+---
+
 ## Highlights
 
 - **One-Click Global Sidebar Access:** Dedicated **Mail Assistant** entry in DSH's top-left global navigation rail (alongside **Plugins** and **Automation tasks**), toggleable anytime from Settings, Plugins, or the Mail Assistant page itself.

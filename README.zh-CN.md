@@ -27,6 +27,18 @@
 
 ---
 
+## DSH 版本与分支对照
+
+请根据你使用的 DeepSeek Harness (DSH) 宿主版本选择对应分支：
+
+| 目标 DSH 版本 | 对应分支 | Node.js 要求 | Tag 与说明 |
+| :--- | :--- | :--- | :--- |
+| **`>=0.2.2-rc.3 <0.3.0`** | [`main`](https://github.com/FashionChen111/Mail-Assistant-Plugin/tree/main) / [`0.2.2-rc3`](https://github.com/FashionChen111/Mail-Assistant-Plugin/tree/0.2.2-rc3) | `^22.19.0 \|\| >=24` | `v1.4.0` — `main` 为主力开发主干；`0.2.2-rc3` 锁定 `0.2.2-rc.3` 兼容版本 |
+| **`0.2.3-alpha.2`** | [`0.2.3-alpha.2`](https://github.com/FashionChen111/Mail-Assistant-Plugin/tree/0.2.3-alpha.2) | `^24.22.3 \|\| >=26.13.1` | `v1.4.0-dsh-0.2.3-alpha.2` — 面向 DSH `0.2.3-alpha.2` 的适配分支（Cordis 4.2 alpha、宿主路由认证、预打包 EWS） |
+| **`0.2.0-rc.1`** | [`0.2.0-rc1`](https://github.com/FashionChen111/Mail-Assistant-Plugin/tree/0.2.0-rc1) | `^22.19.0 \|\| >=24` | `v1.4.0-dsh-0.2.0-rc1` — 面向 DSH `0.2.0-rc.1` 的向下兼容分支（预打包 EWS） |
+
+---
+
 ## 核心特性
 
 - **左上角全局快捷入口**：在 DeepSeek Harness 左上角全局面板区（`插件`、`自动化任务` 与 `更多` 之间）提供一键直达的 **Mail Assistant** 入口，并支持在设置页、插件详情页或主页面内随时一键隐藏或恢复。

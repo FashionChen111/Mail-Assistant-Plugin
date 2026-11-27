@@ -11,8 +11,10 @@ const activationStateSchema = z.object({
 
 function activatesMail(event, explicitPrefix, requiresUserRpc) {
   const triggersMail = (message) => {
+    const { principal, rpcId } = message?.source ?? {}
+    if (principal !== undefined && principal?.kind !== 'owner') return false
     // Older child sessions could record model delegation with source.kind = 'user'.
-    if (requiresUserRpc && !(typeof message?.source?.rpcId === 'string' && message.source.rpcId.length > 0)) {
+    if (requiresUserRpc && !(typeof rpcId === 'string' && rpcId.length > 0)) {
       return false
     }
     return isUserMessageTriggeringMail(message, explicitPrefix)

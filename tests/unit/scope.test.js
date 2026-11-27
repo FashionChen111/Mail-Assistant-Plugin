@@ -98,7 +98,15 @@ test('createSessionScope activates only for user prompts owned by the exact sess
   assert.equal(scope.isSessionActivated(fork), false)
   apply(fork, 4, 'user/message', { ...userPrompt, source: { kind: 'agent-message' } })
   assert.equal(scope.isSessionActivated(fork), false)
-  apply(fork, 5, 'user/message', userPrompt)
+  apply(fork, 5, 'user/message', {
+    ...userPrompt,
+    source: { kind: 'user', rpcId: 'viewer-prompt', principal: { kind: 'share-viewer' } },
+  })
+  assert.equal(scope.isSessionActivated(fork), false)
+  apply(fork, 6, 'user/message', {
+    ...userPrompt,
+    source: { kind: 'user', rpcId: 'owner-prompt', principal: { kind: 'owner' } },
+  })
   assert.equal(scope.isSessionActivated(fork), true)
 
   apply(child, 0, 'agent/inbox/spliced', { inserted: [userPrompt] })

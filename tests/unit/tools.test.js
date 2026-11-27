@@ -378,8 +378,9 @@ test('registerExchangeTools gates all 15 tools and systemPrompt section behind @
   }
 
   assert.ok(registeredPrompt)
-  assert.equal(registeredPrompt.text({ agent: { session: inactiveSession } }), '')
-  assert.match(registeredPrompt.text({ agent: { session: activeSession } }), /exchange_save_draft/)
+  assert.equal(registeredPrompt.text({}), '')
+  assert.equal(registeredPrompt.text({ session: inactiveSession }), '')
+  assert.match(registeredPrompt.text({ session: activeSession }), /exchange_save_draft/)
 })
 
 test('exchange_extract_todos honors include_unread/include_important combinations and exchange_summarize_project handles float days & PERM_001 fallback', async () => {

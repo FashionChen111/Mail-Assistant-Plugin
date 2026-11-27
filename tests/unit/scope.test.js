@@ -56,90 +56,60 @@ test('isUserMessageTriggeringMail only accepts user-authored messages', () => {
   )
 })
 
-test('createSessionScope uses sessionProjections for Turn-1 inbox splice and resume user/message', async () => {
-  let registeredDef = null
+test('createSessionScope activates only for user prompts owned by the exact session', async () => {
+  let projection
+  let disposed = false
   const states = new WeakMap()
-  const ctx = {
+  const scope = await createSessionScope({
     sessionProjections: {
       async register(def) {
-        registeredDef = def
+        projection = def
         return {
-          stateOf(session) {
-            return states.get(session) ?? def.init()
-          },
-          async dispose() {},
+          stateOf(session) { return states.get(session) },
+          async dispose() { disposed = true },
         }
       },
     },
+  })
+
+  function session(header = {}, inheritedEventCount = 0) {
+    const session = {}
+    states.set(session, projection.init(header, inheritedEventCount))
+    return session
   }
 
-  const scope = await createSessionScope(ctx, { explicitPrefix: '@mail' })
-  assert.ok(registeredDef)
-  assert.equal(registeredDef.key, 'dsh-exchange:activated')
-  assert.equal(registeredDef.stateSchema.parse(true), true)
-  assert.throws(() => registeredDef.stateSchema.parse('bad'))
+  function apply(session, seq, type, data) {
+    states.set(session, projection.apply(states.get(session), { seq, type, data }))
+  }
 
-  const sessionA = { id: 'sess-a' }
-  const sessionB = { id: 'sess-b' }
-  const sessionC = { id: 'sess-c' }
+  const userPrompt = { source: { kind: 'user' }, content: [{ type: 'text', text: '@mail check Jira' }] }
+  const parent = session()
+  const fork = session({ isSeeded: true }, 4)
+  const child = session({ origin: 'subagent' })
+  assert.equal(projection.key, 'dsh-exchange:activated')
+  assert.equal(projection.stateVersion, 3)
+  assert.deepEqual(projection.stateSchema.parse(states.get(fork)), states.get(fork))
+  assert.throws(() => projection.stateSchema.parse(true))
+  assert.equal(scope.isSessionActivated(parent), false)
 
-  // Initially all hidden
-  assert.equal(scope.isSessionActivated(sessionA), false)
-  assert.equal(scope.isSessionActivated(sessionB), false)
+  apply(parent, 0, 'agent/inbox/spliced', { inserted: [userPrompt] })
+  assert.equal(scope.isSessionActivated(parent), true)
+  apply(fork, 3, 'user/message', userPrompt)
+  assert.equal(scope.isSessionActivated(fork), false)
+  apply(fork, 4, 'user/message', { ...userPrompt, source: { kind: 'agent-message' } })
+  assert.equal(scope.isSessionActivated(fork), false)
+  apply(fork, 5, 'user/message', userPrompt)
+  assert.equal(scope.isSessionActivated(fork), true)
 
-  // Turn 1: agent/inbox/spliced arrives BEFORE tools.resolve()
-  const nextA = registeredDef.apply(false, {
-    type: 'agent/inbox/spliced',
-    data: {
-      inserted: [{ source: { kind: 'user' }, content: [{ type: 'text', text: '@mail check Widevine' }] }],
-    },
-  })
-  states.set(sessionA, nextA)
-  assert.equal(scope.isSessionActivated(sessionA), true)
-  assert.equal(scope.isSessionActivated(sessionB), false)
-
-  // Assistant message containing @mail does NOT activate sessionB
-  const nextB = registeredDef.apply(false, {
-    type: 'assistant/message',
-    data: { content: [{ type: 'text', text: 'Try typing @mail' }] },
-  })
-  states.set(sessionB, nextB)
-  assert.equal(scope.isSessionActivated(sessionB), false)
-
-  // Resume/replay via committed user/message activates sessionC
-  const nextC = registeredDef.apply(false, {
-    type: 'user/message',
-    data: { source: { kind: 'user' }, content: [{ type: 'text', text: '@mail assistant 汇总待办' }] },
-  })
-  states.set(sessionC, nextC)
-  assert.equal(scope.isSessionActivated(sessionC), true)
+  apply(child, 0, 'agent/inbox/spliced', { inserted: [userPrompt] })
+  assert.equal(scope.isSessionActivated(child), false)
+  apply(child, 1, 'agent/inbox/spliced', { inserted: [{
+    ...userPrompt,
+    source: { kind: 'user', rpcId: 'child-prompt' },
+  }] })
+  assert.equal(scope.isSessionActivated(child), true)
+  assert.equal(scope.isSessionActivated(session()), false)
 
   await scope.dispose()
-})
-
-test('createSessionScope falls back to session/event when sessionProjections is absent', async () => {
-  const listeners = []
-  const ctx = {
-    on(eventName, fn) {
-      listeners.push({ eventName, fn })
-      return () => {}
-    },
-  }
-
-  const scope = await createSessionScope(ctx, { explicitPrefix: '@mail' })
-  const s1 = { id: 's1' }
-  const s2 = { id: 's2' }
-
-  assert.equal(scope.isSessionActivated(s1), false)
-  for (const l of listeners) {
-    if (l.eventName === 'session/event') {
-      l.fn(s1, {
-        type: 'agent/inbox/spliced',
-        data: { inserted: [{ source: { kind: 'user' }, content: [{ type: 'text', text: '@mail hi' }] }] },
-      })
-    }
-  }
-  assert.equal(scope.isSessionActivated(s1), true)
-  assert.equal(scope.isSessionActivated(s2), false)
-  await scope.dispose()
+  assert.equal(disposed, true)
 })

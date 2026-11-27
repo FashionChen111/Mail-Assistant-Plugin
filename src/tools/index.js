@@ -1176,7 +1176,7 @@ export function registerExchangeTools(ctx, { tools, scope }) {
       name: 'dsh-exchange:instructions',
       order: 3200,
       interpolate: false,
-      text: ({ agent }) => (agent?.session && scope.isSessionActivated(agent.session) ? EXCHANGE_SYSTEM_PROMPT : ''),
+      text: ({ session }) => (scope.isSessionActivated(session) ? EXCHANGE_SYSTEM_PROMPT : ''),
     })
     if (typeof disposePrompt === 'function') disposers.push(disposePrompt)
   }

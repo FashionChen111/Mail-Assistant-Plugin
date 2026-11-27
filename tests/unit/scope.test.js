@@ -94,16 +94,29 @@ test('createSessionScope activates only for user prompts owned by the exact sess
 
   apply(parent, 0, 'agent/inbox/spliced', { inserted: [userPrompt] })
   assert.equal(scope.isSessionActivated(parent), true)
-  apply(fork, 3, 'user/message', userPrompt)
+  const inheritedPrompt = { ...userPrompt, id: 'parent-queued-prompt' }
+  apply(fork, 2, 'user/message', userPrompt)
+  apply(fork, 3, 'agent/inbox/spliced', {
+    target: 'next-turn', start: 0, inserted: [inheritedPrompt],
+  })
   assert.equal(scope.isSessionActivated(fork), false)
-  apply(fork, 4, 'user/message', { ...userPrompt, source: { kind: 'agent-message' } })
+  apply(fork, 4, 'agent/inbox/spliced', {
+    target: 'next-turn', start: 0, removedCount: 1, inserted: [],
+  })
+  apply(fork, 5, 'user/message', inheritedPrompt)
+  assert.equal(scope.isSessionActivated(fork), false, 'claiming an inherited message is not user consent')
+  apply(fork, 6, 'agent/inbox/spliced', {
+    target: 'next-turn', start: 0, inserted: [inheritedPrompt],
+  })
+  assert.equal(scope.isSessionActivated(fork), false, 'requeueing an inherited message is not user consent')
+  apply(fork, 7, 'user/message', { ...userPrompt, source: { kind: 'agent-message' } })
   assert.equal(scope.isSessionActivated(fork), false)
-  apply(fork, 5, 'user/message', {
+  apply(fork, 8, 'user/message', {
     ...userPrompt,
     source: { kind: 'user', rpcId: 'viewer-prompt', principal: { kind: 'share-viewer' } },
   })
   assert.equal(scope.isSessionActivated(fork), false)
-  apply(fork, 6, 'user/message', {
+  apply(fork, 9, 'user/message', {
     ...userPrompt,
     source: { kind: 'user', rpcId: 'owner-prompt', principal: { kind: 'owner' } },
   })

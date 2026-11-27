@@ -7,25 +7,21 @@ const activationStateSchema = z.object({
   activated: z.boolean(),
   firstOwnSeq: z.int().nonnegative(),
   requiresUserRpc: z.boolean(),
+  inheritedTriggerIds: z.array(z.string()),
 })
 
-function activatesMail(event, explicitPrefix, requiresUserRpc) {
-  const triggersMail = (message) => {
-    const { principal, rpcId } = message?.source ?? {}
-    if (principal !== undefined && principal?.kind !== 'owner') return false
-    // Older child sessions could record model delegation with source.kind = 'user'.
-    if (requiresUserRpc && !(typeof rpcId === 'string' && rpcId.length > 0)) {
-      return false
-    }
-    return isUserMessageTriggeringMail(message, explicitPrefix)
-  }
+function isOwnedMailPrompt(message, explicitPrefix, requiresUserRpc) {
+  const { principal, rpcId } = message?.source ?? {}
+  if (principal !== undefined && principal?.kind !== 'owner') return false
+  // Older child sessions could record model delegation with source.kind = 'user'.
+  if (requiresUserRpc && !(typeof rpcId === 'string' && rpcId.length > 0)) return false
+  return isUserMessageTriggeringMail(message, explicitPrefix)
+}
 
-  if (event.type === 'user/message') return triggersMail(event.data)
-  if (event.type === 'agent/inbox/spliced') {
-    const inserted = event.data?.inserted
-    return Array.isArray(inserted) && inserted.some(triggersMail)
-  }
-  return false
+function eventMessages(event) {
+  if (event.type === 'user/message') return [event.data]
+  if (event.type === 'agent/inbox/spliced' && Array.isArray(event.data?.inserted)) return event.data.inserted
+  return []
 }
 
 export async function createSessionScope(ctx, { explicitPrefix = '@mail' } = {}) {
@@ -34,12 +30,28 @@ export async function createSessionScope(ctx, { explicitPrefix = '@mail' } = {})
     stateVersion: 3,
     stateSchema: activationStateSchema,
     init(header, inheritedEventCount) {
-      return { activated: false, firstOwnSeq: inheritedEventCount, requiresUserRpc: header.origin === 'subagent' }
+      return {
+        activated: false,
+        firstOwnSeq: inheritedEventCount,
+        requiresUserRpc: header.origin === 'subagent',
+        inheritedTriggerIds: [],
+      }
     },
     apply(state, event) {
-      if (state.activated || !Number.isSafeInteger(event?.seq) || event.seq < state.firstOwnSeq) return state
-      return activatesMail(event, explicitPrefix, state.requiresUserRpc)
-        ? { ...state, activated: true }
+      if (state.activated || !Number.isSafeInteger(event?.seq)) return state
+      const messages = eventMessages(event)
+      if (event.seq < state.firstOwnSeq) {
+        // A fork can claim or requeue inherited inbox messages at new sequence numbers.
+        const ids = messages
+          .filter((message) => typeof message?.id === 'string'
+            && !state.inheritedTriggerIds.includes(message.id)
+            && isUserMessageTriggeringMail(message, explicitPrefix))
+          .map((message) => message.id)
+        return ids.length > 0 ? { ...state, inheritedTriggerIds: [...state.inheritedTriggerIds, ...ids] } : state
+      }
+      return messages.some((message) => !state.inheritedTriggerIds.includes(message?.id)
+        && isOwnedMailPrompt(message, explicitPrefix, state.requiresUserRpc))
+        ? { ...state, activated: true, inheritedTriggerIds: [] }
         : state
     },
   })
